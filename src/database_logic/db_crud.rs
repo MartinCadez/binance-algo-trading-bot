@@ -2,6 +2,7 @@
 use sqlx::PgPool;
 use super::db_objects::Trade;
 use super::db_objects::Price;
+use super::db_objects::Tables;
 
 
 //===============TRADES=================
@@ -18,8 +19,12 @@ pub async fn create_trade(pool: &PgPool, name: &str, amount: f64) -> Result<Trad
     Ok(user)
 }
 
-pub async fn get_trade_by_id(pool: &PgPool, user_id: i32) -> Result<Option<Trade>, sqlx::Error> {
-    let result = sqlx::query_as::<_, Trade>("SELECT * FROM trades WHERE id = $1")
+// TODO: Tables need to be trusted
+pub async fn get_row_by_id(pool: &PgPool, table: &Tables, user_id: i32) -> Result<Option<Trade>, sqlx::Error> {
+
+    let query = format!("SELECT * FROM {} WHERE id = $1", table.as_str());
+
+    let result = sqlx::query_as::<_, Trade>(&query)
         .bind(user_id)
         .fetch_optional(pool)
         .await?;
@@ -27,8 +32,11 @@ pub async fn get_trade_by_id(pool: &PgPool, user_id: i32) -> Result<Option<Trade
     Ok(result)
 }
 
-pub async fn delete_trade(pool: &PgPool, user_id: i32) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM trades WHERE id = $1")
+pub async fn delete_row_by_id(pool: &PgPool, table: &Tables, user_id: i32) -> Result<u64, sqlx::Error> {
+
+    let query = format!("DELETE FROM {} WHERE id = $1", table.as_str());
+
+    let result = sqlx::query(&query)
         .bind(user_id)
         .execute(pool)
         .await?;

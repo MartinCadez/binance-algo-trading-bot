@@ -1,10 +1,10 @@
 // TODO create table, drop table, check if exists, clear table, 
 use::sqlx::{PgPool, Error};
-use super::db_objects::Column;
+use super::db_objects::{Column, Tables};
 
-pub async fn create_custom_table(pool: &PgPool, table_name: &str, columns: Vec<Column>) -> Result<(), Error> {
+pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec<Column>) -> Result<(), Error> {
     // Start constructing the SQL query
-    let mut query = format!("CREATE TABLE IF NOT EXISTS {} (", table_name);
+    let mut query = format!("CREATE TABLE IF NOT EXISTS {} (", table_name.as_str());
 
     // Add columns to the query
     let column_definitions: Vec<String> = columns.into_iter().map(|col| {
@@ -24,13 +24,13 @@ pub async fn create_custom_table(pool: &PgPool, table_name: &str, columns: Vec<C
         Ok(_) => {
             println!(
                 "Table '{}' created successfully with {} columns.",
-                table_name,
+                table_name.as_str(),
                 column_definitions.len()
             );
             Ok(())
         }
         Err(e) => {
-            eprintln!("Failed to create table '{}': {}", table_name, e);
+            eprintln!("Failed to create table '{}': {}", table_name.as_str(), e);
             // You can also log to a file or return a custom error here if needed
             Err(e)
         }

@@ -7,6 +7,22 @@ pub struct Column {
     pub constraints: Option<String>, // Optional constraints like "NOT NULL", "PRIMARY KEY"
 }
 
+pub enum Tables{
+    Trades,
+    Prices,
+    Test,
+}
+
+impl Tables{
+    pub fn as_str(&self) -> &str {
+        match self {
+            Tables::Trades => "trades",
+            Tables::Prices => "prices",
+            Tables::Test => "test",
+        }
+    }
+}
+
 #[derive(Debug, sqlx::FromRow)]
 pub struct Trade {
     pub id: i32,
