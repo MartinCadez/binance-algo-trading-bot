@@ -1,0 +1,21 @@
+# Rust
+/target/
+Cargo.lock
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# Neovim
+.nvim/
+*.swp
+*.swo
+*~
+.lsp/
+.direnv/
+
+# General
+.env
+.DS_Store
