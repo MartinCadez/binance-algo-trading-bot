@@ -16,6 +16,18 @@ Cargo.lock
 .lsp/
 .direnv/
 
+## Vim/Vi
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+.*.sw[pox]
+.swp
+*.sw[op]
+*.vi
+.tags*
 # General
 .env
 .DS_Store
