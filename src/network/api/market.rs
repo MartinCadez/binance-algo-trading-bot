@@ -3,6 +3,7 @@ use binance_spot_connector_rust::{
     market::{self, klines::KlineInterval},
 };
 use tokio::time::{sleep, Duration};
+use tokio_cron_scheduler::{Job, JobScheduler};
 
 // Delay between HTTP requests
 const REQUEST_DELAY_MS: u64 = 250;
@@ -42,6 +43,37 @@ pub async fn fetch_hist_market_data(
     Ok(())
 }
 
+pub async fn scheduled_task(
+    cron_expr: &str,
+    symbol: &'static str,
+    limit: u32,
+    interval: KlineInterval,
+) {
+    let scheduler = JobScheduler::new().await.unwrap();
+
+    // Schedule job to run at the specified cron expression
+    scheduler
+        .add(
+            Job::new_async(cron_expr, {
+                move |_uuid, _l| {
+                    Box::pin(async move {
+                        fetch_hist_market_data(symbol, limit, interval)
+                            .await
+                            .unwrap();
+                    })
+                }
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Schedule runner
+    tokio::spawn(async move {
+        scheduler.start().await.unwrap();
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,5 +93,21 @@ mod tests {
             let result = fetch_hist_market_data(symbol, limit, i).await;
             assert!(result.is_ok(), "{}", i);
         }
+    }
+
+    #[tokio::test]
+    async fn test_scheduled_task() {
+        let symbol: &'static str = "BTCUSDT";
+        let intervals: Vec<KlineInterval> = vec![KlineInterval::Minutes1];
+        let limit: u32 = 2;
+        let cron_expr = "*/5 * * * * *";
+
+        for interval in intervals {
+            scheduled_task(cron_expr, symbol, limit, interval).await;
+        }
+
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to listen for Ctrl+C signal");
     }
 }
