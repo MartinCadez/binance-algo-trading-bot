@@ -1,15 +1,13 @@
 // Implement Create row, delete row, update row and read row or rows
-use sqlx::PgPool;
-use super::db_objects::Trade;
-use super::db_objects::Price;
-use super::db_objects::Tables;
-
+use::sqlx::{PgPool, Error};
+use crate::utils::objects::Trade;
+use crate::utils::objects::CandleStick;
 
 //===============TRADES=================
 // Create a row for our table
 pub async fn create_trade(pool: &PgPool, name: &str, amount: f64) -> Result<Trade, sqlx::Error> {
     let user = sqlx::query_as::<_, Trade>(
-        "INSERT INTO Trades (coin, amount) VALUES ($1, $2) RETURNING *"
+        "INSERT INTO trades (coin, amount) VALUES ($1, $2) RETURNING *"
     )
     .bind(name)
     .bind(amount)
@@ -19,10 +17,10 @@ pub async fn create_trade(pool: &PgPool, name: &str, amount: f64) -> Result<Trad
     Ok(user)
 }
 
-// TODO: Tables need to be trusted
-pub async fn get_row_by_id(pool: &PgPool, table: &Tables, user_id: i32) -> Result<Option<Trade>, sqlx::Error> {
+// TODO: change to get last trade
+pub async fn get_row_by_id(pool: &PgPool, user_id: i32) -> Result<Option<Trade>, sqlx::Error> {
 
-    let query = format!("SELECT * FROM {} WHERE id = $1", table.as_str());
+    let query = format!("SELECT * FROM trades WHERE id = $1");
 
     let result = sqlx::query_as::<_, Trade>(&query)
         .bind(user_id)
@@ -32,9 +30,10 @@ pub async fn get_row_by_id(pool: &PgPool, table: &Tables, user_id: i32) -> Resul
     Ok(result)
 }
 
-pub async fn delete_row_by_id(pool: &PgPool, table: &Tables, user_id: i32) -> Result<u64, sqlx::Error> {
+// TODO: change to delete all data
+pub async fn delete_row_by_id(pool: &PgPool, user_id: i32) -> Result<u64, sqlx::Error> {
 
-    let query = format!("DELETE FROM {} WHERE id = $1", table.as_str());
+    let query = format!("DELETE FROM trades WHERE id = $1");
 
     let result = sqlx::query(&query)
         .bind(user_id)
@@ -45,9 +44,9 @@ pub async fn delete_row_by_id(pool: &PgPool, table: &Tables, user_id: i32) -> Re
 }
 
 //===============PRICES=================UNTESTED
-// Create a row for our table
-pub async fn create_price(pool: &PgPool, id: &str, open: f64, high: f64, low: f64, close: f64, volume: f64, timestamp: String) -> Result<Price, sqlx::Error> {
-    let user = sqlx::query_as::<_, Price>(
+// Create a row for our table and delete last if to many (m)
+pub async fn create_price(pool: &PgPool, id: &str, open: f64, high: f64, low: f64, close: f64, volume: f64, timestamp: String) -> Result<CandleStick, sqlx::Error> {
+    let user = sqlx::query_as::<_, CandleStick>(
         "INSERT INTO prices (id, open, high, low, close, volume, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *"
     )
     .bind(id)
@@ -63,8 +62,9 @@ pub async fn create_price(pool: &PgPool, id: &str, open: f64, high: f64, low: f6
     Ok(user)
 }
 
-pub async fn get_price_by_id(pool: &PgPool, user_id: i32) -> Result<Option<Price>, sqlx::Error> {
-    let result = sqlx::query_as::<_, Price>("SELECT * FROM prices WHERE id = $1")
+// get last n prices
+pub async fn get_price_by_id(pool: &PgPool, user_id: i32) -> Result<Option<CandleStick>, sqlx::Error> {
+    let result = sqlx::query_as::<_, CandleStick>("SELECT * FROM prices WHERE id = $1")
         .bind(user_id)
         .fetch_optional(pool)
         .await?;
@@ -72,6 +72,7 @@ pub async fn get_price_by_id(pool: &PgPool, user_id: i32) -> Result<Option<Price
     Ok(result)
 }
 
+// TODO clear table
 pub async fn delete_price(pool: &PgPool, user_id: i32) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM prices WHERE id = $1")
         .bind(user_id)

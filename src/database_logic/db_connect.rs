@@ -64,17 +64,15 @@ mod tests {
             }
         ];
     
-        let trades_table_name = Tables::Test;
-    
         db_tables::drop_table(&pool, "Test_table_2").await.expect("Failed to drop table");
         db_tables::create_custom_table(&pool, table_name, columns_for_trades).await.expect("Failed to create custom table");
 
         // create 2 rows, get second row by id and delete it
         db_crud::create_trade(&pool, "Alice", 2.5).await.expect("");
         let new_trade_2 = db_crud::create_trade(&pool, "Branko", 2.6).await.expect("");
-        let user = db_crud::get_row_by_id(&pool, &trades_table_name, new_trade_2.id).await.expect("");
+        let user = db_crud::get_row_by_id(&pool, new_trade_2.id).await.expect("");
         println!("Trade 2: {:?}", user);
-        db_crud::delete_row_by_id(&pool, &trades_table_name, 2).await.expect("");
+        db_crud::delete_row_by_id(&pool, 2).await.expect("");
         
         // drop that table
         db_tables::drop_table(&pool, "test_table_2").await.expect("Failed to drop table");
