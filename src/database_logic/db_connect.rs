@@ -1,7 +1,4 @@
-// TODO connect to the database with given URL
 use sqlx::PgPool;
-
-
 
 pub async fn connect_to_database(database_url: &String) -> Option<PgPool> {
     //println!("Connecting to database at {}", database_url);
@@ -22,10 +19,10 @@ mod tests {
     use super::*;
     use dotenv::dotenv;
     use std::env;
-    use crate::db_tables;
-    use crate::database_logic::db_objects::{Column, Tables};
+    use crate::database_logic::db_tables;
     use crate::database_logic::db_crud;
-    use crate::db_connect;
+    use crate::database_logic::db_connect;
+    use crate::utils::objects::{CandleStick, Trade};
 
     #[tokio::test]
     async fn test_connection() {
@@ -45,36 +42,38 @@ mod tests {
         // create pool
         let pool = db_connect::connect_to_database(&database_url).await.expect("Failed connecting");
         
-        // create table
-        let table_name = Tables::Test;
-        let columns_for_trades= vec![
-            Column {
-                name: "id".to_string(),
-                col_type: "SERIAL".to_string(),
-                constraints: Some("PRIMARY KEY".to_string()),
-            }, 
-            Column {
-                name: "coin".to_string(),
-                col_type: "TEXT".to_string(),
-                constraints: None,
-            },Column {
-                name: "amount".to_string(),
-                col_type: "Double precision".to_string(),
-                constraints: None,
-            }
-        ];
-    
-        db_tables::drop_table(&pool, "Test_table_2").await.expect("Failed to drop table");
-        db_tables::create_custom_table(&pool, table_name, columns_for_trades).await.expect("Failed to create custom table");
-
-        // create 2 rows, get second row by id and delete it
-        db_crud::create_trade(&pool, "Alice", 2.5).await.expect("");
-        let new_trade_2 = db_crud::create_trade(&pool, "Branko", 2.6).await.expect("");
-        let user = db_crud::get_row_by_id(&pool, new_trade_2.id).await.expect("");
-        println!("Trade 2: {:?}", user);
-        db_crud::delete_row_by_id(&pool, 2).await.expect("");
+        // create tables
+        db_tables::create_prices_table(&pool).await.expect("Failed to create prices table");
+        db_tables::create_trades_table(&pool).await.expect("Failed to create trades table");
         
-        // drop that table
-        db_tables::drop_table(&pool, "test_table_2").await.expect("Failed to drop table");
+        let price = CandleStick { 
+            coin: "BTC".to_string(),
+            open: 5.5, 
+            high: 5.7, 
+            low: 5.2, 
+            close: 5.3, 
+            volume: 200.0,
+            timestamp: 0,
+        };
+        let trade = Trade { 
+            coin: "BTC".to_string(), 
+            price: 5.4, 
+            amount: 100.0, 
+            timestamp: 0, 
+            state: "BUY".to_string(), 
+        };
+        
+        db_crud::add_price(&pool, price, 3).await.expect("Failed to add price");
+        db_crud::add_trade(&pool, trade).await.expect("Failed to add trade");
+
+        // get last trade and print it
+        let last_trade = db_crud::get_last_trade(&pool).await.expect("Failed to load last trade");
+
+        // get last 3 prices
+        let last_3_prices = db_crud::get_last_n_prices(&pool, 3).await.expect("Failed to load prices");
+
+        println!("Trade: {:?}", last_trade);
+        println!("Prices: {:?}", last_3_prices);
+        
     }
 }

@@ -52,21 +52,94 @@ pub async fn drop_table(pool: &PgPool, table_name: &str) -> Result<(), Error> {
     }
 }
 
-pub async fn clear_table(pool: &PgPool, table_name: &str) -> Result<(), Error> {
-    let query = format!("DELETE FROM {};", table_name);
+// create our 2 tables
+pub async fn create_trades_table(pool: &PgPool) -> Result<(), Error> {
+    let columns_for_trades= vec![
+            Column {
+                name: "id".to_string(),
+                col_type: "SERIAL".to_string(),
+                constraints: Some("PRIMARY KEY".to_string()),
+            }, 
+            Column {
+                name: "coin".to_string(),
+                col_type: "TEXT".to_string(),
+                constraints: None,
+            },
+            Column {
+                name: "price".to_string(),
+                col_type: "Double precision".to_string(),
+                constraints: None,
+            },
+            Column {
+                name: "amount".to_string(),
+                col_type: "Double precision".to_string(),
+                constraints: None,
+            }, 
+            Column {
+                name: "timestamp".to_string(),
+                col_type: "INTEGER".to_string(),
+                constraints: None,
+            },
+            Column {
+                name: "State".to_string(),
+                col_type: "TEXT".to_string(),
+                constraints: None,
+            }
+        ];
+    
+    let table_name = Tables::Trades;
+    create_custom_table(&pool, table_name, columns_for_trades).await.expect("Failed to create custom table");
+    Ok(())
+}
 
-    match sqlx::query(&query).execute(pool).await {
-        Ok(result) => {
-            println!(
-                "Cleared table '{}', removed {} rows.",
-                table_name,
-                result.rows_affected()
-            );
-            Ok(())
+pub async fn create_prices_table(pool: &PgPool) -> Result<(), Error> {
+    let columns_for_prices = vec![
+        Column {
+            name: "id".to_string(),
+            col_type: "SERIAL".to_string(),
+            constraints: Some("PRIMARY KEY".to_string()),
+        },
+        Column {
+            name: "coin".to_string(),
+            col_type: "TEXT".to_string(),
+            constraints: None,
+        },
+        Column {
+            name: "open".to_string(),
+            col_type: "DOUBLE PRECISION".to_string(),
+            constraints: None,
+        },
+        Column {
+            name: "high".to_string(),
+            col_type: "DOUBLE PRECISION".to_string(),
+            constraints: None,
+        },
+        Column {
+            name: "low".to_string(),
+            col_type: "DOUBLE PRECISION".to_string(),
+            constraints: None,
+        },
+        Column {
+            name: "close".to_string(),
+            col_type: "DOUBLE PRECISION".to_string(),
+            constraints: None,
+        },
+        Column {
+            name: "volume".to_string(),
+            col_type: "DOUBLE PRECISION".to_string(),
+            constraints: None,
+        },
+        Column {
+            name: "timestamp".to_string(),
+            col_type: "INTEGER".to_string(), // More appropriate than STRING
+            constraints: None,
         }
-        Err(e) => {
-            eprintln!("Failed to clear table '{}': {}", table_name, e);
-            Err(e)
-        }
-    }
+    ];
+
+    let table_name = Tables::Prices; // Assuming you have a Tables enum
+    create_custom_table(pool, table_name, columns_for_prices)
+        .await
+        .expect("Failed to create prices table");
+
+    Ok(())
 }
