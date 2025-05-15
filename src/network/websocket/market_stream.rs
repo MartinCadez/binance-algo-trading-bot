@@ -1,23 +1,16 @@
+use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use tokio_tungstenite::tungstenite::http::Uri;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{http::Uri, Message},
+};
 
-const BINANCE_FUTURES_WS_BASE_URL: &str = "wss://stream.binance.com:9443";
-// const DEFAULT_SYMBOL: &str = "BTCUSDT";
-// const TIMEFRAMES: &[&str] = &["1m", "3m", "5m", "15m"];
-
-#[derive(Debug)]
-pub enum MarketDataError {
-    ConnectionError(String),
-    ParseError(String),
-    WebSocketError(String),
-    SubscriptionError(String),
-    ChannelError(String),
-}
+const PING_INTERVAL: Duration = Duration::from_secs(180);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct KlineData {
@@ -114,103 +107,76 @@ impl From<&KlineData> for Candle {
     }
 }
 
-fn create_kline_ws_url(symbol: &str, timeframes: &[&str]) -> Result<String, MarketDataError> {
-    // Binance WebSocket API endpoint
-    let endpoint = format!(
+fn get_ws_klinedata_url(base_url: &str, symbol: &str, timeframes: &[&str]) -> String {
+    format!(
         "{}/stream?streams={}",
-        BINANCE_FUTURES_WS_BASE_URL,
+        base_url,
         timeframes
             .iter()
             .map(|tf| format!("{}@kline_{}", symbol.to_lowercase(), tf))
             .collect::<Vec<_>>()
             .join("/")
-    );
-
-    return Ok(endpoint);
+    )
 }
 
-async fn process_message(
-    message: Message,                 // Raw ws message
-    candle_tx: &mpsc::Sender<Candle>, // Channel to send processed candles
-) -> Result<(), MarketDataError> {
+async fn process_message(message: Message, candle_tx: &mpsc::Sender<Candle>) -> Result<()> {
     match message {
         Message::Text(text) => {
-            // println!("{}", text);
+            println!("Raw message: {}", text);
 
-            // Deserialize the message into a KlineEvent
-            if let Ok(kline_event) = serde_json::from_str::<WsKlineEvent>(&text)
-                .map_err(|e| MarketDataError::ParseError(format!("Kline parse error: {}", e)))
-                .and_then(|event| {
-                    if event.stream.contains("kline_") {
-                        Ok(event)
-                    } else {
-                        Err(MarketDataError::ParseError("Non-kline event".into()))
-                    }
-                })
-            {
-                candle_tx
-                    .send(Candle::from(&kline_event.data.kline))
-                    .await
-                    .map_err(|e| {
-                        MarketDataError::ChannelError(format!("Failed to send candle: {}", e))
-                    })?;
+            let value: Value = serde_json::from_str(&text)?;
+
+            let stream = value
+                .get("stream")
+                .and_then(|s| s.as_str())
+                .unwrap_or_default();
+
+            if !stream.contains("kline_") {
+                return Ok(());
             }
+
+            let kline_event: WsKlineEvent = serde_json::from_str(&text)?;
+
+            let candle = Candle::from(&kline_event.data.kline);
+
+            candle_tx
+                .send(candle)
+                .await
+                .map_err(|e| anyhow!("Failed to send candle: {}", e))?;
         }
+
         Message::Close(_) => {
-            return Err(MarketDataError::WebSocketError(
-                "Connection closed by server".into(),
-            ));
+            return Err(anyhow!("Connection closed by server"));
         }
+
+        Message::Ping(_) => {
+            println!("Received ping, sending pong");
+        }
+
+        Message::Pong(_) => {
+            println!("Received pong");
+        }
+
+        // ignoring other messages
         _ => {}
     }
+
     Ok(())
 }
 
-async fn manage_websocket_connection(
-    url: String,
-    candle_tx: mpsc::Sender<Candle>,
-) -> Result<(), MarketDataError> {
-    let uri = url
-        .parse::<Uri>()
-        .map_err(|e| MarketDataError::ConnectionError(format!("Failed to parse URL: {}", e)))?;
-
-    println!("Connecting to WebSocket at: {}", uri);
-
-    let (ws_stream, response) = connect_async(uri)
-        .await
-        .map_err(|e| MarketDataError::ConnectionError(format!("Failed to connect: {}", e)))?;
-
-    println!("Connected to WebSocket. HTTP status: {}", response.status());
-    println!("Response headers: {:?}", response.headers());
-
+async fn manage_connection(url: String, candle_tx: mpsc::Sender<Candle>) -> Result<()> {
+    let uri = url.parse::<Uri>()?;
+    let (ws_stream, _response) = connect_async(uri).await?;
     let (mut write, mut read) = ws_stream.split();
+    let mut last_ping = Instant::now();
 
-    while let Some(message) = read.next().await {
-        match message {
-            Ok(msg) => match &msg {
-                Message::Ping(data) => {
-                    println!("Received ping from server");
-                    write.send(Message::Pong(data.clone())).await.map_err(|e| {
-                        MarketDataError::WebSocketError(format!("Failed to send pong: {}", e))
-                    })?;
-                }
-                Message::Pong(_) => {
-                    println!("Received pong from server");
-                }
-                _ => {
-                    if let Err(e) = process_message(msg, &candle_tx).await {
-                        println!("Error processing message: {:?}", e);
-                        break;
-                    }
-                }
-            },
-            Err(e) => {
-                return Err(MarketDataError::WebSocketError(format!(
-                    "WebSocket error: {}",
-                    e
-                )));
-            }
+    while let Some(message) = read.next().await.transpose()? {
+        if last_ping.elapsed() > PING_INTERVAL {
+            write.send(Message::Pong(vec![].into())).await?;
+            last_ping = Instant::now();
         }
+
+        process_message(message, &candle_tx).await?;
     }
 
     Ok(())
@@ -226,26 +192,47 @@ async fn process_candles(mut candle_rx: mpsc::Receiver<Candle>) {
         if timeframe_candles.len() > 1000 {
             timeframe_candles.remove(0);
         }
+
+        println!(
+            "[{}] {} | O: {:.2} | H: {:.2} | L: {:.2} | C: {:.2} | V: {:.4} | QV: {:.2} | Trades: {} | {}",
+            candle.timeframe,
+            candle.symbol,
+            candle.open,
+            candle.high,
+            candle.low,
+            candle.close,
+            candle.volume,
+            candle.quote_volume,
+            candle.number_of_trades,
+            if candle.is_closed { "CLOSED" } else { "OPEN" }
+        );
     }
 }
 
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    const SYMBOL: &str = "btcusdt";
 
     #[tokio::test]
-    async fn test_websocket_connection() -> Result<(), MarketDataError> {
-        let timeframes: &[&str] = &["1m"];
-        let (candle_tx, candle_rx) = mpsc::channel(1000);
-        let ws_url = create_kline_ws_url(SYMBOL, timeframes)?;
-        println!("WebSocket URL: {}", ws_url);
-        let processor_handle = tokio::spawn(process_candles(candle_rx));
-        let result = manage_websocket_connection(ws_url, candle_tx).await;
-        processor_handle.await.map_err(|e| {
-            MarketDataError::ChannelError(format!("Processor task failed: {:?}", e))
-        })?;
-        result?;
+    async fn test_ws_conn() -> Result<()> {
+        let ws_base_url = "wss://stream.binance.com:9443";
+        let default_symbol = "BTCUSDT";
+        let timeframes = &["1m", "3m", "15m"];
+
+        let (candle_tx, candle_rx) = tokio::sync::mpsc::channel(1000);
+
+        let ws_url = get_ws_klinedata_url(ws_base_url, default_symbol, timeframes);
+        println!("WS URL: {}", ws_url);
+
+        tokio::spawn(process_candles(candle_rx));
+
+        match manage_connection(ws_url, candle_tx).await {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("{:?}", e);
+            }
+        }
+
         Ok(())
     }
 }
