@@ -17,4 +17,3 @@ pub struct CandleStick {
     pub volume: f64,
     pub timestamp: i32,
 }
-

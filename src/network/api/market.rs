@@ -5,6 +5,8 @@ use binance_spot_connector_rust::{
 use tokio::time::{sleep, Duration};
 use tokio_cron_scheduler::{Job, JobScheduler};
 
+use crate::utils::objects::CandleStick;
+
 // Delay between HTTP requests
 const REQUEST_DELAY_MS: u64 = 250;
 
@@ -30,7 +32,17 @@ pub async fn fetch_hist_market_data(
             if let Ok(klines) = serde_json::from_str::<Vec<serde_json::Value>>(&data) {
                 // Print candlestick data
                 for k in klines.iter().take(limit as usize) {
-                    println!("{:#}", k);
+                    
+                    let candlestick = CandleStick {
+                        coin: symbol.to_string(),
+                        open: k[1].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
+                        high: k[2].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
+                        low: k[3].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
+                        close: k[4].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
+                        volume: k[5].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
+                        timestamp: k[0].as_i64().unwrap_or(0) as i32,
+                    };
+                    println!("{:#?}", candlestick);
                 }
             }
         }
