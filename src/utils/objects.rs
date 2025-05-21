@@ -7,7 +7,7 @@ pub struct Trade {
     pub state: String, // either buy or sell
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow, Clone)]
 pub struct CandleStick {
     pub coin: String,
     pub open: f64,

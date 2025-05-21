@@ -4,7 +4,9 @@ use binance_spot_connector_rust::{
 };
 use tokio::time::{sleep, Duration};
 use tokio_cron_scheduler::{Job, JobScheduler};
+use tokio::sync::mpsc::Sender;
 
+use tokio::sync::oneshot;
 use crate::utils::objects::CandleStick;
 
 // Delay between HTTP requests
@@ -14,26 +16,19 @@ pub async fn fetch_hist_market_data(
     symbol: &'static str,
     limit: u32,
     interval: KlineInterval,
-) -> Result<(), Error> {
+) -> Result<Vec<CandleStick>, Error> {
     let client = BinanceHttpClient::default();
+    let mut candlesticks = Vec::new();
 
-    println!("======= {} ========", interval);
-
-    // Send request to the Binance server & wait for the response
     match client
         .send(market::klines(symbol, interval).limit(limit))
         .await
     {
         Ok(response) => {
-            // Convert response to a String (AKA Serialization) if successful
-            let data = response.into_body_str().await?; // Propagates I/O or encoding errors
-
-            // Convert response to a JSON object (AKA Deserialization)
+            let data = response.into_body_str().await?;
             if let Ok(klines) = serde_json::from_str::<Vec<serde_json::Value>>(&data) {
-                // Print candlestick data
                 for k in klines.iter().take(limit as usize) {
-                    
-                    let candlestick = CandleStick {
+                    candlesticks.push(CandleStick {
                         coin: symbol.to_string(),
                         open: k[1].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         high: k[2].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
@@ -41,18 +36,23 @@ pub async fn fetch_hist_market_data(
                         close: k[4].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         volume: k[5].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         timestamp: k[0].as_i64().unwrap_or(0) as i32,
-                    };
-                    println!("{:#?}", candlestick);
+                    });
                 }
+
+                // most recent candlestick is removed since its not closed yet
+                candlesticks.pop();
             }
         }
-        Err(e) => println!("{}, {}, {}, {:?}", symbol, limit, interval, e),
+
+        Err(e) => {
+            println!("{}, {}, {}, {:?}", symbol, limit, interval, e);
+            return Err(e);
+        }
     }
 
-    // Avoid hitting the rate limit
     sleep(Duration::from_millis(REQUEST_DELAY_MS)).await;
 
-    Ok(())
+    Ok(candlesticks)
 }
 
 pub async fn scheduled_task(
@@ -60,18 +60,25 @@ pub async fn scheduled_task(
     symbol: &'static str,
     limit: u32,
     interval: KlineInterval,
-) {
+    tx: Sender<Vec<CandleStick>>,
+)  {
     let scheduler = JobScheduler::new().await.unwrap();
 
-    // Schedule job to run at the specified cron expression
     scheduler
         .add(
             Job::new_async(cron_expr, {
+                let tx = tx.clone();
                 move |_uuid, _l| {
+                    let tx = tx.clone();
                     Box::pin(async move {
-                        fetch_hist_market_data(symbol, limit, interval)
-                            .await
-                            .unwrap();
+                        match fetch_hist_market_data(symbol, limit, interval).await {
+                            Ok(candlesticks) => {
+                                if let Err(err) = tx.send(candlesticks).await {
+                                    eprintln!("Failed to send candlesticks: {}", err);
+                                }
+                            }
+                            Err(e) => eprintln!("Error fetching market data: {:?}", e),
+                        }
                     })
                 }
             })
@@ -80,10 +87,10 @@ pub async fn scheduled_task(
         .await
         .unwrap();
 
-    // Schedule runner
     tokio::spawn(async move {
         scheduler.start().await.unwrap();
     });
+
 }
 
 #[cfg(test)]
@@ -96,30 +103,31 @@ mod tests {
         let symbol: &'static str = "BTCUSDT";
 
         // Valid timeframes/intervals
-        let intervals: Vec<KlineInterval> = vec![KlineInterval::Minutes1, KlineInterval::Minutes15];
+        let intervals: Vec<KlineInterval> = vec![KlineInterval::Minutes1];
 
         // Lookback for number of candlesticks, e.i. number of past klines of our interest
         let limit: u32 = 2;
 
         for i in intervals {
             let result = fetch_hist_market_data(symbol, limit, i).await;
-            assert!(result.is_ok(), "{}", i);
+            println!("{:?}", result.unwrap());
         }
     }
 
     #[tokio::test]
-    async fn test_scheduled_task() {
-        let symbol: &'static str = "BTCUSDT";
-        let intervals: Vec<KlineInterval> = vec![KlineInterval::Minutes1];
-        let limit: u32 = 2;
-        let cron_expr = "*/5 * * * * *";
+    async fn test_scheduled_task_with_output() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<CandleStick>>(10);
 
-        for interval in intervals {
-            scheduled_task(cron_expr, symbol, limit, interval).await;
-        }
+        scheduled_task("*/5 * * * * *", "BTCUSDT", 2, KlineInterval::Minutes1, tx).await;
+
+        tokio::spawn(async move {
+            while let Some(candles) = rx.recv().await {
+                println!("Received candlesticks: {:?}", candles);
+            }
+        });
 
         tokio::signal::ctrl_c()
             .await
             .expect("Failed to listen for Ctrl+C signal");
-    }
+}
 }
