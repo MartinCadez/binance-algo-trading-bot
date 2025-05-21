@@ -41,8 +41,8 @@ pub async fn fetch_hist_market_data(
 
                 // most recent candlestick is removed since its not closed yet
                 candlesticks.pop();
+                }
             }
-        }
 
         Err(e) => {
             println!("{}, {}, {}, {:?}", symbol, limit, interval, e);
@@ -123,11 +123,11 @@ mod tests {
         tokio::spawn(async move {
             while let Some(candles) = rx.recv().await {
                 println!("Received candlesticks: {:?}", candles);
-            }
+        }
         });
 
         tokio::signal::ctrl_c()
             .await
             .expect("Failed to listen for Ctrl+C signal");
-}
+    }
 }

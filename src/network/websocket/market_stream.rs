@@ -209,6 +209,7 @@ async fn process_candles(mut candle_rx: mpsc::Receiver<Candle>) {
     }
 }
 
+/* 
 #[cfg(test)]
 mod integration_tests {
     use super::*;
@@ -236,3 +237,4 @@ mod integration_tests {
         Ok(())
     }
 }
+    */

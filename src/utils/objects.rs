@@ -17,3 +17,9 @@ pub struct CandleStick {
     pub volume: f64,
     pub timestamp: i32,
 }
+
+pub enum Signal {
+    Buy,
+    Sell,
+    Hold,
+}
