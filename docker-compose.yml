@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:17.5-alpine3.21
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: mysecurepassword
+      POSTGRES_DB: database
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - postgres_network
+    restart: always
+
+volumes: 
+  postgres_data:
+    name: postgres_data
+
+networks:
+  postgres_network:
+    driver: bridge
