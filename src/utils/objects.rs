@@ -3,7 +3,7 @@ pub struct Trade {
     pub coin: String,
     pub price: f64,
     pub amount: f64,
-    pub timestamp: i32,
+    pub timestamp: i64,
     pub state: String, // either buy or sell
 }
 
@@ -11,11 +11,11 @@ pub struct Trade {
 pub struct CandleStick {
     pub coin: String,
     pub open: f64,
-    pub high:f64,
+    pub high: f64,
     pub low: f64,
     pub close: f64,
     pub volume: f64,
-    pub timestamp: i32,
+    pub timestamp: i64,
 }
 
 pub enum Signal {

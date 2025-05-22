@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS prices (
+    id SERIAL PRIMARY KEY,
+    coin VARCHAR NOT NULL,
+    open FLOAT NOT NULL,
+    high FLOAT NOT NULL,
+    low FLOAT NOT NULL,
+    close FLOAT NOT NULL,
+    volume FLOAT NOT NULL,
+    timestamp BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS trades (
+    id SERIAL PRIMARY KEY,
+    coin VARCHAR NOT NULL,
+    price FLOAT NOT NULL,
+    amount FLOAT NOT NULL,
+    timestamp BIGINT NOT NULL,
+    state VARCHAR NOT NULL
+);

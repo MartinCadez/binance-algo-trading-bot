@@ -2,12 +2,12 @@ use binance_spot_connector_rust::{
     hyper::{BinanceHttpClient, Error},
     market::{self, klines::KlineInterval},
 };
+use tokio::sync::mpsc::Sender;
 use tokio::time::{sleep, Duration};
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tokio::sync::mpsc::Sender;
 
-use tokio::sync::oneshot;
 use crate::utils::objects::CandleStick;
+use tokio::sync::oneshot;
 
 // Delay between HTTP requests
 const REQUEST_DELAY_MS: u64 = 250;
@@ -19,6 +19,7 @@ pub async fn fetch_hist_market_data(
 ) -> Result<Vec<CandleStick>, Error> {
     let client = BinanceHttpClient::default();
     let mut candlesticks = Vec::new();
+    let limit = limit + 1;
 
     match client
         .send(market::klines(symbol, interval).limit(limit))
@@ -35,14 +36,14 @@ pub async fn fetch_hist_market_data(
                         low: k[3].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         close: k[4].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         volume: k[5].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
-                        timestamp: k[0].as_i64().unwrap_or(0) as i32,
+                        timestamp: k[0].as_i64().unwrap_or(0),
                     });
                 }
 
                 // most recent candlestick is removed since its not closed yet
                 candlesticks.pop();
-                }
             }
+        }
 
         Err(e) => {
             println!("{}, {}, {}, {:?}", symbol, limit, interval, e);
@@ -61,7 +62,7 @@ pub async fn scheduled_task(
     limit: u32,
     interval: KlineInterval,
     tx: Sender<Vec<CandleStick>>,
-)  {
+) {
     let scheduler = JobScheduler::new().await.unwrap();
 
     scheduler
@@ -71,7 +72,7 @@ pub async fn scheduled_task(
                 move |_uuid, _l| {
                     let tx = tx.clone();
                     Box::pin(async move {
-                        match fetch_hist_market_data(symbol, limit, interval).await {
+                        match fetch_hist_market_data(symbol, limit - 1, interval).await {
                             Ok(candlesticks) => {
                                 if let Err(err) = tx.send(candlesticks).await {
                                     eprintln!("Failed to send candlesticks: {}", err);
@@ -90,7 +91,6 @@ pub async fn scheduled_task(
     tokio::spawn(async move {
         scheduler.start().await.unwrap();
     });
-
 }
 
 #[cfg(test)]
@@ -123,7 +123,7 @@ mod tests {
         tokio::spawn(async move {
             while let Some(candles) = rx.recv().await {
                 println!("Received candlesticks: {:?}", candles);
-        }
+            }
         });
 
         tokio::signal::ctrl_c()
