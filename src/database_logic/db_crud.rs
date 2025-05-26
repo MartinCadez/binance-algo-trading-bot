@@ -1,9 +1,47 @@
 // Implement Create row, delete row, update row and read row or rows
 use crate::utils::objects::CandleStick;
 use crate::utils::objects::Trade;
+use futures::TryFutureExt;
 use ::sqlx::{Error, PgPool};
 
 //===============TRADES=================
+// add buy trade
+pub async fn add_buy_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<(), sqlx::Error>{
+    let buy_trade = Trade{
+        coin: last_candlestick.coin.clone(),
+        price: last_candlestick.close,
+        amount: budget / last_candlestick.close, // calculate amount to buy
+        timestamp: last_candlestick.timestamp,
+        state: "BUY".to_string(),
+    };
+
+    add_trade(pool, buy_trade).await.expect("");
+    Ok(())
+}
+
+// add sell trade, return money we got
+pub async fn add_sell_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<f64, sqlx::Error>{
+    
+    let mut added_budget: f64 = 0.0;
+    // get last trade
+    if let Some(last_trade) = get_last_trade(pool).await? {
+        // Only add sell trade if the last trade was a "BUY"
+        if last_trade.state == "BUY" {
+            let sell_trade = Trade {
+                coin: last_candlestick.coin.clone(),
+                price: last_candlestick.close,
+                amount: last_trade.amount,
+                timestamp: last_candlestick.timestamp,
+                state: "SELL".to_string(),
+            };
+            
+            added_budget += last_trade.amount - last_candlestick.close;
+            add_trade(pool, sell_trade).await?; // propagate error if any
+        }
+    }
+    Ok(added_budget)
+}
+
 // add a trade to database trade table
 pub async fn add_trade(pool: &PgPool, trade: Trade) -> Result<Trade, sqlx::Error> {
     let inserted_trade = sqlx::query_as::<_, Trade>(
