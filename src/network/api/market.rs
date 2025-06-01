@@ -118,7 +118,7 @@ mod tests {
     async fn test_scheduled_task_with_output() {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<CandleStick>>(10);
 
-        scheduled_task("*/5 * * * * *", "BTCUSDT", 2, KlineInterval::Minutes1, tx).await;
+        scheduled_task("1 * * * * *", "BTCUSDT", 3, KlineInterval::Minutes1, tx).await;
 
         tokio::spawn(async move {
             while let Some(candles) = rx.recv().await {

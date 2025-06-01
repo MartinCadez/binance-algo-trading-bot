@@ -1,50 +1,105 @@
 use crate::utils::objects::CandleStick;
-use crate::utils::objects::Signal;
+use crate::utils::objects::TradeAction;
+use crate::database_logic::db_crud::{is_position_open, open_trade, close_trade, get_open_trade_info};
 
-// calculates last sma
-pub fn calculate_sma(candles: &[CandleStick], period: usize) -> Option<f64> {
-    if candles.len() < period {
-        return None;
-    }
+use sqlx::PgPool;
 
-    let sum: f64 = candles[candles.len() - period..]
-        .iter()
+pub fn sma(
+    candlesticks: &[CandleStick], 
+    lookback: usize
+) -> f64 {
+    candlesticks
+        .iter() 
+        .rev() // calculate average with latest candles first
+        .take(lookback) 
         .map(|c| c.close)
-        .sum();
-
-    Some(sum / period as f64)
+        .sum::<f64>() / lookback as f64
 }
 
-// get sma signal
-pub fn generate_realtime_dual_sma_signal(
-    candles: &[CandleStick],
-    short_period: usize,
-    long_period: usize,
-) -> Signal {
-    if candles.len() < long_period + 1 {
-        return Signal::Hold; // Not enough data
+pub fn sma_signal(
+    candlesticks: &[CandleStick],
+    fast_lookback: usize,
+    slow_lookback: usize
+) -> bool {
+    
+    let fast_ma = sma(candlesticks, fast_lookback);
+    let slow_ma = sma(candlesticks, slow_lookback);
+
+    println!(
+        "Fast SMA: {:.2}, Slow SMA: {:.2}",
+        fast_ma, slow_ma
+    );
+    
+    fast_ma > slow_ma
+}
+
+pub async fn execute_trade_action(
+    pool: &sqlx::PgPool,
+    candlesticks: &[CandleStick],
+    fast_period: usize,
+    slow_period: usize,
+    symbol: &str,
+) -> Result<TradeAction, Box<dyn std::error::Error + Send + Sync>> {
+    let has_open_position = is_position_open(pool, symbol).await?;
+    let is_bullish_signal = sma_signal(candlesticks, fast_period, slow_period);
+
+    match (has_open_position, is_bullish_signal) {
+        (false, true) => Ok(TradeAction::EnterLong), // no open position & bullish signal -> Enter long
+        (true, false) => Ok(TradeAction::ExitLong), // already open position & bearish signal -> Exit long
+        _ => Ok(TradeAction::Hold) // already open position & bullish signal or no open position & bearish signal -> Hold
     }
+}
 
-    // Calculate previous and current short and long SMAs
-    let prev_candles = &candles[..candles.len() - 1];
-    let curr_candles = candles;
+pub async fn evaluate_decision(
+    pool: &PgPool,
+    candlesticks: &[CandleStick],
+    current_balance: &mut f64,
+    symbol: &str,
+    fast_period: usize,
+    slow_period: usize,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let last_candle = candlesticks.last().ok_or("No candlesticks available")?;
 
-    let prev_short_sma = calculate_sma(prev_candles, short_period);
-    let prev_long_sma = calculate_sma(prev_candles, long_period);
+    match execute_trade_action(pool, candlesticks, fast_period, slow_period, symbol).await? {
 
-    let curr_short_sma = calculate_sma(curr_candles, short_period);
-    let curr_long_sma = calculate_sma(curr_candles, long_period);
+        TradeAction::EnterLong => {
+            let amount = *current_balance / last_candle.close; // asset amount based on current 
+            open_trade(
+                pool,
+                symbol, 
+                last_candle.close, 
+                amount,
+                *current_balance, 
+                last_candle.timestamp as i64
+            ).await?;
+            
+            println!("[BUY] Opened long trade for {} at price {}", symbol, last_candle.close);
+        }
 
-    match (prev_short_sma, prev_long_sma, curr_short_sma, curr_long_sma) {
-        (Some(prev_s), Some(prev_l), Some(curr_s), Some(curr_l)) => {
-            if prev_s < prev_l && curr_s > curr_l {
-                Signal::Buy
-            } else if prev_s > prev_l && curr_s < curr_l {
-                Signal::Sell
+        TradeAction::ExitLong => {
+            if let Some(open_trade) = get_open_trade_info(pool, symbol).await? {
+                let exit_price = last_candle.close;
+                let pnl = (exit_price - open_trade.entry_price) * open_trade.amount;
+                
+                close_trade(
+                    pool, 
+                    open_trade.id, 
+                    exit_price, 
+                    pnl, 
+                    last_candle.timestamp as i64
+                ).await?;
+                
+                println!("[SOLD] Closed long trade for {} at price {}, PnL: {}", symbol, exit_price, pnl);
+                *current_balance += pnl;
             } else {
-                Signal::Hold
+                println!("No open trade to close");
             }
         }
-        _ => Signal::Hold,
+
+        TradeAction::Hold => {
+            println!("[NO ACTION] Holding position for {}", symbol);
+        }
     }
+
+    Ok(())
 }

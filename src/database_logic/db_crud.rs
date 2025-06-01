@@ -6,57 +6,57 @@ use ::sqlx::{Error, PgPool};
 
 //===============TRADES=================
 // add buy trade
-pub async fn add_buy_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<(), sqlx::Error>{
-    let buy_trade = Trade{
-        coin: last_candlestick.coin.clone(),
-        price: last_candlestick.close,
-        amount: budget / last_candlestick.close, // calculate amount to buy
-        timestamp: last_candlestick.timestamp,
-        state: "BUY".to_string(),
-    };
+// pub async fn add_buy_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<(), sqlx::Error>{
+//     let buy_trade = Trade{
+//         coin: last_candlestick.coin.clone(),
+//         price: last_candlestick.close,
+//         amount: budget / last_candlestick.close, // calculate amount to buy
+//         timestamp: last_candlestick.timestamp,
+//         state: "BUY".to_string(),
+//     };
 
-    add_trade(pool, buy_trade).await.expect("");
-    Ok(())
-}
+//     add_trade(pool, buy_trade).await.expect("");
+//     Ok(())
+// }
 
-// add sell trade, return money we got
-pub async fn add_sell_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<f64, sqlx::Error>{
+// // add sell trade, return money we got
+// pub async fn add_sell_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<f64, sqlx::Error>{
     
-    let mut added_budget: f64 = 0.0;
-    // get last trade
-    if let Some(last_trade) = get_last_trade(pool).await? {
-        // Only add sell trade if the last trade was a "BUY"
-        if last_trade.state == "BUY" {
-            let sell_trade = Trade {
-                coin: last_candlestick.coin.clone(),
-                price: last_candlestick.close,
-                amount: last_trade.amount,
-                timestamp: last_candlestick.timestamp,
-                state: "SELL".to_string(),
-            };
+//     let mut added_budget: f64 = 0.0;
+//     // get last trade
+//     if let Some(last_trade) = get_last_trade(pool).await? {
+//         // Only add sell trade if the last trade was a "BUY"
+//         if last_trade.state == "BUY" {
+//             let sell_trade = Trade {
+//                 coin: last_candlestick.coin.clone(),
+//                 price: last_candlestick.close,
+//                 amount: last_trade.amount,
+//                 timestamp: last_candlestick.timestamp,
+//                 state: "SELL".to_string(),
+//             };
             
-            added_budget += last_trade.amount - last_candlestick.close;
-            add_trade(pool, sell_trade).await?; // propagate error if any
-        }
-    }
-    Ok(added_budget)
-}
+//             added_budget += last_trade.amount - last_candlestick.close;
+//             add_trade(pool, sell_trade).await?; // propagate error if any
+//         }
+//     }
+//     Ok(added_budget)
+// }
 
-// add a trade to database trade table
-pub async fn add_trade(pool: &PgPool, trade: Trade) -> Result<Trade, sqlx::Error> {
-    let inserted_trade = sqlx::query_as::<_, Trade>(
-        "INSERT INTO trades (coin, price, amount, timestamp, state) VALUES ($1, $2, $3, $4, $5) RETURNING *"
-    )
-    .bind(trade.coin)
-    .bind(trade.price)
-    .bind(trade.amount)
-    .bind(trade.timestamp)
-    .bind(trade.state)
-    .fetch_one(pool)
-    .await?;
+// // add a trade to database trade table
+// pub async fn add_trade(pool: &PgPool, trade: Trade) -> Result<Trade, sqlx::Error> {
+//     let inserted_trade = sqlx::query_as::<_, Trade>(
+//         "INSERT INTO trades (coin, price, amount, timestamp, state) VALUES ($1, $2, $3, $4, $5) RETURNING *"
+//     )
+//     .bind(trade.coin)
+//     .bind(trade.price)
+//     .bind(trade.amount)
+//     .bind(trade.timestamp)
+//     .bind(trade.state)
+//     .fetch_one(pool)
+//     .await?;
 
-    Ok(inserted_trade)
-}
+//     Ok(inserted_trade)
+// }
 
 // TODO: change to get last trade
 pub async fn get_last_trade(pool: &PgPool) -> Result<Option<Trade>, sqlx::Error> {
@@ -163,4 +163,93 @@ pub async fn delete_price(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM prices").execute(pool).await?;
 
     Ok(result.rows_affected())
+}
+
+pub async fn is_position_open(
+    pool: &sqlx::PgPool,
+    symbol: &str
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM trades 
+            WHERE symbol = $1 AND status = 'OPEN'
+        )"#,
+        symbol
+    )
+    .fetch_one(pool)
+    .await
+    .map(|exists| exists.unwrap_or(false))
+}
+
+pub async fn open_trade(
+    pool: &PgPool,
+    symbol: &str,
+    entry_price: f64,
+    amount: f64,
+    budget_used: f64,
+    timestamp: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO trades 
+        (symbol, entry_price, amount, budget_used, entry_time, status)
+        VALUES ($1, $2, $3, $4, to_timestamp($5), 'OPEN')
+        "#,
+    )
+    .bind(symbol)
+    .bind(entry_price)
+    .bind(amount)
+    .bind(budget_used)
+    .bind(timestamp)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn close_trade(
+    pool: &PgPool,
+    trade_id: i64,
+    exit_price: f64,
+    pnl: f64,
+    timestamp: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE trades
+        SET 
+            exit_price = $1,
+            pnl = $2,
+            exit_time = to_timestamp($3),
+            status = 'CLOSED'
+        WHERE id = $4
+        "#,
+    )
+    .bind(exit_price)
+    .bind(pnl)
+    .bind(timestamp)
+    .bind(trade_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_open_trade_info(
+    pool: &PgPool,
+    symbol: &str
+) -> Result<Option<Trade>, sqlx::Error> {
+    sqlx::query_as!(
+        Trade,
+        r#"
+        SELECT * 
+        FROM trades
+        WHERE symbol = $1 AND status = 'OPEN'
+        LIMIT 1
+        "#,
+        symbol
+    )
+    .fetch_optional(pool)
+    .await
 }
