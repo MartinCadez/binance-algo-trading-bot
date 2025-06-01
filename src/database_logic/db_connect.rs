@@ -1,17 +1,13 @@
 use sqlx::PgPool;
 
 pub async fn connect_to_database(database_url: &String) -> Option<PgPool> {
-    //println!("Connecting to database at {}", database_url);
-    let pool = match PgPool::connect(database_url).await {
+    match PgPool::connect(database_url).await {
         Ok(pool) => {
-            println!(" Successfully connected to the database!");
-            Some(pool) // Return the pool if connection is successful
+            println!("✅[POSTGRES DB] Connected to database successfully");
+            Some(pool)
         }
-        Err(_e) => {
-            None // Return None if connection fails
-        }
-    };
-    return pool;
+        Err(_) => None,
+    }
 }
 
 #[cfg(test)]
@@ -19,7 +15,6 @@ mod tests {
     use super::*;
     use dotenv::dotenv;
     use std::env;
-    use crate::database_logic::db_tables;
     use crate::database_logic::db_crud;
     use crate::database_logic::db_connect;
     use crate::utils::objects::{CandleStick, Trade};
@@ -38,16 +33,11 @@ mod tests {
         dotenv().ok(); // Load .env if present
 
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let db_pool = db_connect::connect_to_database(&database_url).await.expect("Connection failed");
         
-        // create pool
-        let pool = db_connect::connect_to_database(&database_url).await.expect("Failed connecting");
-        
-        // create tables
-        db_tables::create_prices_table(&pool).await.expect("Failed to create prices table");
-        db_tables::create_trades_table(&pool).await.expect("Failed to create trades table");
-        
-        let price = CandleStick { 
-            coin: "BTC".to_string(),
+        // candlestick data object example, which is inserted trades table
+        let market_data_example = CandleStick { 
+            symbol: "BTC".to_string(),
             open: 5.5, 
             high: 5.7, 
             low: 5.2, 
@@ -55,24 +45,43 @@ mod tests {
             volume: 200.0,
             timestamp: 0,
         };
-        let trade = Trade { 
-            coin: "BTC".to_string(), 
-            price: 5.4, 
-            amount: 100.0, 
-            timestamp: 0, 
-            state: "BUY".to_string(), 
+        
+        // trade object example, which is inserted trades table
+        let trade_example = Trade { 
+            id: 1,
+            symbol: "BTC".to_string(),
+            entry_price: 100_000.0,
+            exit_price: None,
+            amount: 0.1,
+            budget_used: 10_000.0,
+            pnl: None,
+            entry_time: chrono::Utc::now(),
+            exit_time: None,
+            status: "OPEN".to_string(),
         };
         
-        db_crud::add_price(&pool, price, 3).await.expect("Failed to add price");
-        db_crud::add_trade(&pool, trade).await.expect("Failed to add trade");
+        // add candlestick object example into prices table
+        db_crud::add_price(
+            &db_pool,
+            market_data_example,
+            3
+        ).await.expect("Failed to add price");
 
-        // get last trade and print it
-        let last_trade = db_crud::get_last_trade(&pool).await.expect("Failed to load last trade");
+        // add trade object example into trades table
 
-        // get last 3 prices
-        let last_3_prices = db_crud::get_last_n_prices(&pool, 3).await.expect("Failed to load prices");
+        db_crud::open_trade(
+            &db_pool,
+            &trade_example.symbol,
+            trade_example.entry_price,
+            trade_example.amount,
+            trade_example.budget_used,
+        ).await.expect("Failed to open trade");
 
-        println!("Trade: {:?}", last_trade);
+        let last_trade = db_crud::get_last_trade(&db_pool).await.expect("Failed to load last trade");
+        println!("Last Trade: {:?}", last_trade);
+        
+        let last_3_prices = db_crud::get_last_n_prices(&db_pool, 3).await.expect("Failed to load prices");
+
         println!("Prices: {:?}", last_3_prices);
         
     }

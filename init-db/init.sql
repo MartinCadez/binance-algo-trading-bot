@@ -6,8 +6,7 @@ CREATE TABLE IF NOT EXISTS prices (
     low FLOAT NOT NULL,
     close FLOAT NOT NULL,
     volume FLOAT NOT NULL,
-    timestamp BIGINT NOT NULL,
-    UNIQUE (coin, timestamp)
+    timestamp BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS trades (

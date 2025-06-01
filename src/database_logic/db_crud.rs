@@ -1,11 +1,10 @@
 // Implement Create row, delete row, update row and read row or rows
 use crate::utils::objects::CandleStick;
 use crate::utils::objects::Trade;
-use futures::TryFutureExt;
-use ::sqlx::{Error, PgPool};
+use ::sqlx::PgPool;
 
-//===============TRADES=================
-// add buy trade
+
+// // add buy trade
 // pub async fn add_buy_trade(pool: &PgPool, last_candlestick: &CandleStick, budget: f64) -> Result<(), sqlx::Error>{
 //     let buy_trade = Trade{
 //         coin: last_candlestick.coin.clone(),
@@ -59,6 +58,7 @@ use ::sqlx::{Error, PgPool};
 // }
 
 // TODO: change to get last trade
+#[allow(dead_code)]
 pub async fn get_last_trade(pool: &PgPool) -> Result<Option<Trade>, sqlx::Error> {
     let query = "SELECT * FROM trades ORDER BY id DESC LIMIT 1";
 
@@ -76,14 +76,16 @@ pub async fn clear_trades_table(pool: &PgPool) -> Result<u64, sqlx::Error> {
     Ok(result.rows_affected())
 }
 
+#[allow(dead_code)] 
 pub async fn clear_prices_table(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM prices").execute(pool).await?;
 
     Ok(result.rows_affected())
 }
 
-//===============PRICES=================UNTESTED
+//===============PRICES=================
 // Create a row for our table and delete last if more than m
+#[allow(dead_code)]
 pub async fn add_price(
     pool: &PgPool,
     candle_stick: CandleStick,
@@ -95,7 +97,7 @@ pub async fn add_price(
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *",
     )
-    .bind(candle_stick.coin)
+    .bind(candle_stick.symbol)
     .bind(candle_stick.open)
     .bind(candle_stick.high)
     .bind(candle_stick.low)
@@ -131,9 +133,9 @@ pub async fn insert_prices(pool: &PgPool, candles: Vec<CandleStick>) -> Result<(
     for candle in candles {
         sqlx::query(
             "INSERT INTO prices (coin, open, high, low, close, volume, timestamp)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
-        .bind(candle.coin)
+        .bind(candle.symbol)
         .bind(candle.open)
         .bind(candle.high)
         .bind(candle.low)
@@ -148,22 +150,14 @@ pub async fn insert_prices(pool: &PgPool, candles: Vec<CandleStick>) -> Result<(
     Ok(())
 }
 
-// get last n prices
-pub async fn get_last_n_prices(pool: &PgPool, n: i64) -> Result<Vec<CandleStick>, sqlx::Error> {
-    let result = sqlx::query_as::<_, CandleStick>("SELECT * FROM prices ORDER BY id DESC LIMIT $1")
-        .bind(n)
-        .fetch_all(pool)
-        .await?;
+// pub async fn get_last_n_prices(pool: &PgPool, n: i64) -> Result<Vec<CandleStick>, sqlx::Error> {
+//     let result = sqlx::query_as::<_, CandleStick>("SELECT * FROM prices ORDER BY id DESC LIMIT $1")
+//         .bind(n)
+//         .fetch_all(pool)
+//         .await?;
 
-    Ok(result)
-}
-
-// function for clearing prices table
-pub async fn delete_price(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM prices").execute(pool).await?;
-
-    Ok(result.rows_affected())
-}
+//     Ok(result)
+// }
 
 pub async fn is_position_open(
     pool: &sqlx::PgPool,
@@ -188,20 +182,18 @@ pub async fn open_trade(
     entry_price: f64,
     amount: f64,
     budget_used: f64,
-    timestamp: i64,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         INSERT INTO trades 
         (symbol, entry_price, amount, budget_used, entry_time, status)
-        VALUES ($1, $2, $3, $4, to_timestamp($5), 'OPEN')
+        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 'OPEN')
         "#,
     )
     .bind(symbol)
     .bind(entry_price)
     .bind(amount)
     .bind(budget_used)
-    .bind(timestamp)
     .execute(pool)
     .await?;
 

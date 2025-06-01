@@ -33,9 +33,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Failed to connect to the database");
     
-    db_crud::clear_trades_table(&pool)
-        .await
-        .expect("Failed to clear trades table");
+    // db_crud::clear_trades_table(&pool)
+    //     .await
+    //     .expect("Failed to clear trades table");
 
     db_crud::clear_prices_table(&pool)
         .await
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to insert historical prices");
 
     // Open channel for receiving candlesticks
-    let (tx, mut rx) = mpsc::channel::<Vec<CandleStick>>(2);
+    let (tx, mut rx) = mpsc::channel::<Vec<CandleStick>>(1);
 
     // Task for fetching market data periodically
     scheduled_task(CRON_EXPRESSION, SYMBOL, SLOW_PERIOD as u32, TIMEFRAME, tx).await;
@@ -61,6 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Process incoming candlesticks
     while let Some(candlesticks) = rx.recv().await {
+        println!("Received candlesticks: {:?}", candlesticks.len());
         let last_candle = candlesticks.last().unwrap();
         println!("Last candle: {:?}", last_candle);
         evaluate_decision(

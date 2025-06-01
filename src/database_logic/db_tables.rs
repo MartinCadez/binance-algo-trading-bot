@@ -2,6 +2,7 @@
 use::sqlx::{PgPool, Error};
 use super::db_objects::{Column, Tables};
 
+#[allow(dead_code)]
 pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec<Column>) -> Result<(), Error> {
     // Start constructing the SQL query
     let mut query = format!("CREATE TABLE IF NOT EXISTS {} (", table_name.as_str());
@@ -37,6 +38,7 @@ pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec
     }
 }
 
+#[allow(dead_code)]
 pub async fn drop_table(pool: &PgPool, table_name: &str) -> Result<(), Error> {
     let query = format!("DROP TABLE IF EXISTS {};", table_name);
 
@@ -52,7 +54,7 @@ pub async fn drop_table(pool: &PgPool, table_name: &str) -> Result<(), Error> {
     }
 }
 
-// create our 2 tables
+#[allow(dead_code)]
 pub async fn create_trades_table(pool: &PgPool) -> Result<(), Error> {
     let columns_for_trades= vec![
             Column {
@@ -92,6 +94,7 @@ pub async fn create_trades_table(pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn create_prices_table(pool: &PgPool) -> Result<(), Error> {
     let columns_for_prices = vec![
         Column {
@@ -131,12 +134,12 @@ pub async fn create_prices_table(pool: &PgPool) -> Result<(), Error> {
         },
         Column {
             name: "timestamp".to_string(),
-            col_type: "INTEGER".to_string(), // More appropriate than STRING
+            col_type: "INTEGER".to_string(),
             constraints: None,
         }
     ];
 
-    let table_name = Tables::Prices; // Assuming you have a Tables enum
+    let table_name = Tables::Prices;
     create_custom_table(pool, table_name, columns_for_prices)
         .await
         .expect("Failed to create prices table");

@@ -7,7 +7,6 @@ use tokio::time::{sleep, Duration};
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 use crate::utils::objects::CandleStick;
-use tokio::sync::oneshot;
 
 // Delay between HTTP requests
 const REQUEST_DELAY_MS: u64 = 250;
@@ -30,7 +29,7 @@ pub async fn fetch_hist_market_data(
             if let Ok(klines) = serde_json::from_str::<Vec<serde_json::Value>>(&data) {
                 for k in klines.iter().take(limit as usize) {
                     candlesticks.push(CandleStick {
-                        coin: symbol.to_string(),
+                        symbol: symbol.to_string(),
                         open: k[1].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         high: k[2].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
                         low: k[3].as_str().unwrap_or("0.0").parse().unwrap_or(0.0),
@@ -72,7 +71,7 @@ pub async fn scheduled_task(
                 move |_uuid, _l| {
                     let tx = tx.clone();
                     Box::pin(async move {
-                        match fetch_hist_market_data(symbol, limit - 1, interval).await {
+                        match fetch_hist_market_data(symbol, limit, interval).await {
                             Ok(candlesticks) => {
                                 if let Err(err) = tx.send(candlesticks).await {
                                     eprintln!("Failed to send candlesticks: {}", err);

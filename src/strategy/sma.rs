@@ -21,6 +21,10 @@ pub fn sma_signal(
     fast_lookback: usize,
     slow_lookback: usize
 ) -> bool {
+    println!("{:?}", candlesticks.iter().map(|c| c.close).collect::<Vec<f64>>());
+    // print len of candlestick but just close data
+    println!{"Number of candlesticks: {}", candlesticks.len()};
+    
     
     let fast_ma = sma(candlesticks, fast_lookback);
     let slow_ma = sma(candlesticks, slow_lookback);
@@ -70,7 +74,6 @@ pub async fn evaluate_decision(
                 last_candle.close, 
                 amount,
                 *current_balance, 
-                last_candle.timestamp as i64
             ).await?;
             
             println!("[BUY] Opened long trade for {} at price {}", symbol, last_candle.close);
