@@ -150,14 +150,15 @@ pub async fn insert_prices(pool: &PgPool, candles: Vec<CandleStick>) -> Result<(
     Ok(())
 }
 
-// pub async fn get_last_n_prices(pool: &PgPool, n: i64) -> Result<Vec<CandleStick>, sqlx::Error> {
-//     let result = sqlx::query_as::<_, CandleStick>("SELECT * FROM prices ORDER BY id DESC LIMIT $1")
-//         .bind(n)
-//         .fetch_all(pool)
-//         .await?;
+#[allow(dead_code)]
+pub async fn get_last_n_prices(pool: &PgPool, n: i64) -> Result<Vec<CandleStick>, sqlx::Error> {
+    let result = sqlx::query_as::<_, CandleStick>("SELECT * FROM prices ORDER BY id DESC LIMIT $1")
+        .bind(n)
+        .fetch_all(pool)
+        .await?;
 
-//     Ok(result)
-// }
+    Ok(result)
+}
 
 pub async fn is_position_open(
     pool: &sqlx::PgPool,
