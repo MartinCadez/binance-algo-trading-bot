@@ -2,6 +2,7 @@ mod database_logic;
 mod network;
 mod strategy;
 mod utils;
+mod analysis;
 
 use crate::database_logic::{db_connect, db_crud};
 use crate::network::api::market::{fetch_hist_market_data, scheduled_task};
@@ -85,6 +86,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .await
             .expect("Failed to evaluate decision");
+
+            match analysis::generate_report(&pool, SYMBOL, INITIAL_BALANCE).await {
+                Ok(report) => {
+                    println!("{}", report.format_text());   
+                }
+                Err(e) => eprintln!("Failed to generate report: {e}"),
+            }
         }
     });
 
