@@ -3,6 +3,7 @@ mod network;
 mod strategy;
 mod utils;
 mod analysis;
+mod backtest;
 
 use crate::database_logic::{db_connect, db_crud};
 use crate::network::api::market::{fetch_hist_market_data, scheduled_task};
