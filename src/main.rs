@@ -22,6 +22,8 @@ const TIMEFRAME: KlineInterval = KlineInterval::Minutes1;
 // This runs at second 1 of every minute (e.g., HH:MM:01).
 const CRON_EXPRESSION: &str = "1 * * * * *";
 
+const SAVEDPRICES: i32 = 100;
+
 // Backtest / simulation params (tweak as needed)
 const INITIAL_BALANCE: f64 = 500.0;
 const FAST_PERIOD: usize = 10;
@@ -73,8 +75,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // SAFETY: unwrap() will panic if empty; if that’s possible, handle it:
             // if candlesticks.is_empty() { continue; }
             let last_candle = candlesticks.last().unwrap();
-            println!("Last candle: {:?}", last_candle);
-
+            //println!("Last candle: {:?}", &last_candle);
+            
+            // Save last candle
+            db_crud::add_price(&pool, last_candle.clone(), SAVEDPRICES)
+                .await
+                .expect("Failed to insert price");
             // Core decision engine: reads/writes DB as needed and updates balance
             // (Make sure `evaluate_decision` is side-effect safe and handles errors)
             evaluate_decision(
