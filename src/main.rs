@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Received candlesticks: {:?}", candlesticks.len());
 
             // SAFETY: unwrap() will panic if empty; if that’s possible, handle it:
-            // if candlesticks.is_empty() { continue; }
+            if candlesticks.is_empty() { continue; }
             let last_candle = candlesticks.last().unwrap();
             //println!("Last candle: {:?}", &last_candle);
             
