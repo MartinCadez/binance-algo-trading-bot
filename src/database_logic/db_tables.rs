@@ -1,6 +1,8 @@
-// TODO create table, drop table, check if exists, clear table, 
+
 use::sqlx::{PgPool, Error};
 use super::db_objects::{Column, Tables};
+/// Module for creating and removing database tables when starting
+/// with empty database
 
 #[allow(dead_code)]
 pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec<Column>) -> Result<(), Error> {

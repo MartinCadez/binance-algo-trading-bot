@@ -64,7 +64,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     scheduled_task(CRON_EXPRESSION, SYMBOL, SLOW_PERIOD as u32, TIMEFRAME, tx).await;
 
     // Process incoming candle batches concurrently.
-    // `pool` is moved into the task. If you also need it in main, clone first: let pool2 = pool.clone();
     tokio::spawn(async move {
         let mut current_balance = INITIAL_BALANCE;
 
@@ -72,17 +71,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(candlesticks) = rx.recv().await {
             println!("Received candlesticks: {:?}", candlesticks.len());
 
-            // SAFETY: unwrap() will panic if empty; if that’s possible, handle it:
+            // unwrap incoming candlesticks
             if candlesticks.is_empty() { continue; }
             let last_candle = candlesticks.last().unwrap();
-            //println!("Last candle: {:?}", &last_candle);
             
             // Save last candle
             db_crud::add_price(&pool, last_candle.clone(), SAVEDPRICES)
                 .await
                 .expect("Failed to insert price");
-            // Core decision engine: reads/writes DB as needed and updates balance
-            // (Make sure `evaluate_decision` is side-effect safe and handles errors)
+
+            // Core decision engine: reads/writes DB as needed (trades) and updates balance
             evaluate_decision(
                 &pool,
                 &candlesticks,

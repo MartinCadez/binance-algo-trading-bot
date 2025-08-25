@@ -57,7 +57,6 @@ use ::sqlx::PgPool;
 //     Ok(inserted_trade)
 // }
 
-// TODO: change to get last trade
 #[allow(dead_code)]
 pub async fn get_last_trade(pool: &PgPool) -> Result<Option<Trade>, sqlx::Error> {
     let query = "SELECT * FROM trades ORDER BY id DESC LIMIT 1";
@@ -69,6 +68,7 @@ pub async fn get_last_trade(pool: &PgPool) -> Result<Option<Trade>, sqlx::Error>
     Ok(result)
 }
 
+#[allow(dead_code)]
 // Function for clearing trades table
 pub async fn clear_trades_table(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM trades").execute(pool).await?;
@@ -77,6 +77,7 @@ pub async fn clear_trades_table(pool: &PgPool) -> Result<u64, sqlx::Error> {
 }
 
 #[allow(dead_code)] 
+// Function for clearing trades table
 pub async fn clear_prices_table(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM prices").execute(pool).await?;
 
@@ -84,7 +85,7 @@ pub async fn clear_prices_table(pool: &PgPool) -> Result<u64, sqlx::Error> {
 }
 
 //===============PRICES=================
-// Create a row for our table and delete last if more than m
+// Create a row for our prices table and delete last if more than m
 #[allow(dead_code)]
 pub async fn add_price(
     pool: &PgPool,
@@ -150,6 +151,7 @@ pub async fn insert_prices(pool: &PgPool, candles: Vec<CandleStick>) -> Result<(
     Ok(())
 }
 
+// gets last n prices in database
 #[allow(dead_code)]
 pub async fn get_last_n_prices(pool: &PgPool, n: i64) -> Result<Vec<CandleStick>, sqlx::Error> {
     let result = sqlx::query_as::<_, CandleStick>("SELECT * FROM prices ORDER BY id DESC LIMIT $1")
@@ -160,6 +162,7 @@ pub async fn get_last_n_prices(pool: &PgPool, n: i64) -> Result<Vec<CandleStick>
     Ok(result)
 }
 
+// checks whether the position is open or not
 pub async fn is_position_open(
     pool: &sqlx::PgPool,
     symbol: &str
@@ -177,6 +180,7 @@ pub async fn is_position_open(
     .map(|exists| exists.unwrap_or(false))
 }
 
+// function for opening trade in database
 pub async fn open_trade(
     pool: &PgPool,
     symbol: &str,
@@ -201,6 +205,7 @@ pub async fn open_trade(
     Ok(())
 }
 
+// function for closing trade in database
 pub async fn close_trade(
     pool: &PgPool,
     trade_id: i64,
@@ -229,6 +234,7 @@ pub async fn close_trade(
     Ok(())
 }
 
+// function for fetching information about open trade
 pub async fn get_open_trade_info(
     pool: &PgPool,
     symbol: &str

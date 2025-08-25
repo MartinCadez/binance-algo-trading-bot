@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 
+// function for connecting to database, returns 'pool'
 pub async fn connect_to_database(database_url: &String) -> Option<PgPool> {
     match PgPool::connect(database_url).await {
         Ok(pool) => {

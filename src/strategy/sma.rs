@@ -20,12 +20,6 @@ use sqlx::PgPool;
 
 /// Compute the simple moving average of the latest `lookback` candles.
 /// Uses the *most recent* candles first (reverse iteration).
-///
-/// NOTE:
-/// - If `lookback == 0`, this will divide by zero (panic).
-/// - If `candlesticks.len() < lookback`, it will average fewer values
-///   but still divide by `lookback` (biasing the result down). Consider
-///   validating inputs before calling in production.
 pub fn sma(
     candlesticks: &[CandleStick], 
     lookback: usize
