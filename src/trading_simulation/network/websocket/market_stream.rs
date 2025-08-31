@@ -1,3 +1,10 @@
+/// UNUSED: 
+/// websocket implementataion is not used, in trading simulation production
+/// since we choose to implement discrete strategy, with market order placing,
+/// so constant stream of data  became redundant
+/// preserve is case we decide to implement tradig bot on exchange for order 
+/// placement optimization
+
 use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -208,33 +215,3 @@ async fn process_candles(mut candle_rx: mpsc::Receiver<Candle>) {
         );
     }
 }
-
-/* 
-#[cfg(test)]
-mod integration_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_ws_conn() -> Result<()> {
-        let ws_base_url = "wss://stream.binance.com:9443";
-        let default_symbol = "BTCUSDT";
-        let timeframes = &["1m", "3m", "15m"];
-
-        let (candle_tx, candle_rx) = tokio::sync::mpsc::channel(1000);
-
-        let ws_url = get_ws_klinedata_url(ws_base_url, default_symbol, timeframes);
-        println!("WS URL: {}", ws_url);
-
-        tokio::spawn(process_candles(candle_rx));
-
-        match manage_connection(ws_url, candle_tx).await {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("{:?}", e);
-            }
-        }
-
-        Ok(())
-    }
-}
-    */

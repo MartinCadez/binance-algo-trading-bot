@@ -1,5 +1,5 @@
-use std::path::Path;
 use polars::prelude::*;
+use std::path::Path;
 
 pub fn read_parquet(path: &str) -> PolarsResult<DataFrame> {
     let abs_path = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -1,15 +1,16 @@
+/// UNUSED: 
+/// tables management utilities are currently not used since, whole db and
+/// all db-schemas are created initially with docker, basically there is no 
+/// need for dynamic interaction with db, kept here in case for potential need
 
 use::sqlx::{PgPool, Error};
-use super::db_objects::{Column, Tables};
-/// Module for creating and removing database tables when starting
-/// with empty database
+use super::objects::{Column, Tables};
 
-#[allow(dead_code)]
 pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec<Column>) -> Result<(), Error> {
-    // Start constructing the SQL query
+    // start constructing the SQL query
     let mut query = format!("CREATE TABLE IF NOT EXISTS {} (", table_name.as_str());
 
-    // Add columns to the query
+    // add columns to the query
     let column_definitions: Vec<String> = columns.into_iter().map(|col| {
         let mut definition = format!("{} {}", col.name, col.col_type);
         if let Some(constraint) = col.constraints {
@@ -18,11 +19,11 @@ pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec
         definition
     }).collect();
 
-    // Join all the columns into a single string and append to the query
+    // join all columns into a single string and append to query
     query.push_str(&column_definitions.join(", "));
     query.push_str(");");
 
-    // Execute the query to create the table
+    // execute the query to create the table
     match sqlx::query(&query).execute(pool).await {
         Ok(_) => {
             println!(
@@ -34,13 +35,12 @@ pub async fn create_custom_table(pool: &PgPool, table_name: Tables, columns: Vec
         }
         Err(e) => {
             eprintln!("Failed to create table '{}': {}", table_name.as_str(), e);
-            // You can also log to a file or return a custom error here if needed
+            // you can also log to a file or return a custom error here if needed
             Err(e)
         }
     }
 }
 
-#[allow(dead_code)]
 pub async fn drop_table(pool: &PgPool, table_name: &str) -> Result<(), Error> {
     let query = format!("DROP TABLE IF EXISTS {};", table_name);
 
@@ -56,7 +56,6 @@ pub async fn drop_table(pool: &PgPool, table_name: &str) -> Result<(), Error> {
     }
 }
 
-#[allow(dead_code)]
 pub async fn create_trades_table(pool: &PgPool) -> Result<(), Error> {
     let columns_for_trades= vec![
             Column {
@@ -96,7 +95,6 @@ pub async fn create_trades_table(pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
-#[allow(dead_code)]
 pub async fn create_prices_table(pool: &PgPool) -> Result<(), Error> {
     let columns_for_prices = vec![
         Column {

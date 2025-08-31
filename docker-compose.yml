@@ -1,13 +1,13 @@
 services:
   postgres:
     image: postgres:17.5-alpine3.21
-    container_name: postgres_db
+    container_name: postgres_db2
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: mysecurepassword
       POSTGRES_DB: database
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d

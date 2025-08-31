@@ -1,10 +1,8 @@
-// src/analysis/mod.rs (or wherever you keep analysis code)
-
 use sqlx::PgPool;
 use chrono::{DateTime, Utc};
 use crate::utils::objects::{Trade};
 
-// Point on the realized equity curve (equity after each CLOSED trade)
+// point on the realized equity curve (equity after each CLOSED trade)
 #[derive(Debug, Clone)]
 pub struct EquityPoint {
     pub t: DateTime<Utc>,
@@ -50,7 +48,7 @@ r#"=== Analysis Report ({symbol}) ===
 Total trades: {tot} | Win rate: {wr:.1}%
 Gross PnL: {gpnl:.2} | Profit factor: {pf:.2}
 Best trade: {best:.2} | Worst trade: {worst:.2}
-Open positions: {open} | Unrealized PnL: {unpnl:.2}
+Open position: {open} | Unrealized PnL: {unpnl:.2}
 Avg holding time: {avg_ht:.1}m | Median holding time: {med_ht:.1}m
 Equity (last): {last_eq:.2}
 "#,
@@ -81,8 +79,8 @@ pub async fn get_closed_trades(pool: &PgPool, symbol: &str) -> Result<Vec<Trade>
             symbol,
             entry_price,
             exit_price,
-            amount,
-            budget_used,
+            position_size,
+            trade_size,
             pnl,
             entry_time as "entry_time: chrono::DateTime<chrono::Utc>",
             exit_time  as "exit_time:  chrono::DateTime<chrono::Utc>",
@@ -157,11 +155,11 @@ pub fn build_equity_curve(initial_balance: f64, closed: &[Trade]) -> Vec<EquityP
 pub fn unrealized_pnl(open_trades: &[Trade], last_price: Option<f64>) -> f64 {
     let Some(lp) = last_price else { return 0.0; };
     open_trades.iter()
-        .map(|t| (lp - t.entry_price) * t.amount)
+        .map(|t| (lp - t.entry_price) * t.trade_size)
         .sum()
 }
 
-// Aggregate win/loss stats over CLOSED trades
+// aggregate win/loss stats over CLOSED trades
 pub fn pnl_stats(closed: &[Trade]) -> PnlStats {
     let mut s = PnlStats::default();
     if closed.is_empty() { return s; }
@@ -189,7 +187,7 @@ pub fn pnl_stats(closed: &[Trade]) -> PnlStats {
     s
 }
 
-// Average/median holding time over CLOSED trades (minutes)
+// average/median holding time over CLOSED trades (minutes)
 pub fn holding_time_stats(closed: &[Trade]) -> HoldingTimeStats {
     if closed.is_empty() {
         return HoldingTimeStats::default();
@@ -209,7 +207,6 @@ pub fn holding_time_stats(closed: &[Trade]) -> HoldingTimeStats {
     HoldingTimeStats { avg_minutes: avg, median_minutes: med }
 }
 
-// API for report
 pub async fn generate_report(
     pool: &PgPool,
     symbol: &str,
