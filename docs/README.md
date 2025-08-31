@@ -61,9 +61,8 @@ sheer joy of fighting with the borrow checker until 3 AM! 😅
 - **How does implemented trading simulation works?** <br>
     Initially, market data is fetched from the Binance exchange via its REST API.
     Then, Rust framework [Tokio](https://tokio.rs/), spawns a cron process to manage asynchronous HTTP
-    requests at the end of each configured timeframe 
-    (e.g., every 5 minutes for selected 5-minute timeframe).
-    Fetched data is sent to a channel and stored in a [PostgreSQL](https://www.postgresql.org/) database. 
+    requests at the end of each minute. Fetched data is sent to a channel and stored
+    in a [PostgreSQL](https://www.postgresql.org/) database. 
     Subsequently, parameters are calculated to generate a signal,
     determining whether to enter, hold, or exit a trading position. Each
     position's entry and exit are logged in the database for operation and
@@ -116,7 +115,7 @@ are first satisfied for buy or sell signals, respectively.
     
     1. 🛠 Configure Environment Variables
     ```bash
-    cp .env.example .env
+    cp .env.copy .env
     ```
   
     2. 🐳 Deploy Docker Compose Services
