@@ -5,7 +5,7 @@ use crate::utils::objects::{Trade};
 // point on the realized equity curve (equity after each CLOSED trade)
 #[derive(Debug, Clone)]
 pub struct EquityPoint {
-    pub t: DateTime<Utc>,
+    pub time: DateTime<Utc>,
     pub equity: f64,
 }
 
@@ -42,23 +42,23 @@ pub struct AnalysisReport {
 impl AnalysisReport {
     /// Simple text formatter (for logs / console)
     pub fn format_text(&self) -> String {
-        let p = &self.pnl_stats;
+        let stats = &self.pnl_stats;
         format!(
-r#"=== Analysis Report ({symbol}) ===
-Total trades: {tot} | Win rate: {wr:.1}%
-Gross PnL: {gpnl:.2} | Profit factor: {pf:.2}
-Best trade: {best:.2} | Worst trade: {worst:.2}
-Open position: {open} | Unrealized PnL: {unpnl:.2}
-Avg holding time: {avg_ht:.1}m | Median holding time: {med_ht:.1}m
-Equity (last): {last_eq:.2}
-"#,
+            r#"=== Analysis Report ({symbol}) ===
+            Total trades: {tot} | Win rate: {wr:.1}%
+            Gross PnL: {gpnl:.2} | Profit factor: {pf:.2}
+            Best trade: {best:.2} | Worst trade: {worst:.2}
+            Open position: {open} | Unrealized PnL: {unpnl:.2}
+            Avg holding time: {avg_ht:.1}m | Median holding time: {med_ht:.1}m
+            Equity (last): {last_eq:.2}
+            "#,
             symbol = self.symbol,
-            tot = p.total_trades,
-            wr = p.win_rate * 100.0,
-            gpnl = p.gross_pnl,
-            pf = p.profit_factor,
-            best = p.best_trade,
-            worst = p.worst_trade,
+            tot = stats.total_trades,
+            wr = stats.win_rate * 100.0,
+            gpnl = stats.gross_pnl,
+            pf = stats.profit_factor,
+            best = stats.best_trade,
+            worst = stats.worst_trade,
             open = self.open_positions,
             unpnl = self.unrealized_pnl,
             avg_ht = self.holding_time.avg_minutes,
@@ -143,9 +143,9 @@ pub fn build_equity_curve(initial_balance: f64, closed: &[Trade]) -> Vec<EquityP
     let mut eq = initial_balance;
     let mut curve = Vec::with_capacity(closed.len());
     for tr in closed {
-        if let (Some(pnl), Some(t)) = (tr.pnl, tr.exit_time) {
+        if let (Some(pnl), Some(time)) = (tr.pnl, tr.exit_time) {
             eq += pnl;
-            curve.push(EquityPoint { t, equity: eq });
+            curve.push(EquityPoint { time, equity: eq });
         }
     }
     curve
@@ -155,7 +155,7 @@ pub fn build_equity_curve(initial_balance: f64, closed: &[Trade]) -> Vec<EquityP
 pub fn unrealized_pnl(open_trades: &[Trade], last_price: Option<f64>) -> f64 {
     let Some(lp) = last_price else { return 0.0; };
     open_trades.iter()
-        .map(|t| (lp - t.entry_price) * t.trade_size)
+        .map(|time| (lp - time.entry_price) * time.trade_size)
         .sum()
 }
 
@@ -168,9 +168,9 @@ pub fn pnl_stats(closed: &[Trade]) -> PnlStats {
     let mut wins = Vec::new();
     let mut losses = Vec::new();
 
-    for t in closed {
-        let p = t.pnl.unwrap_or(0.0);
-        if p >= 0.0 { wins.push(p); } else { losses.push(p); }
+    for time in closed {
+        let stats = time.pnl.unwrap_or(0.0);
+        if stats >= 0.0 { wins.push(stats); } else { losses.push(stats); }
     }
 
     s.winners = wins.len();
@@ -182,8 +182,8 @@ pub fn pnl_stats(closed: &[Trade]) -> PnlStats {
     let sum_wins = wins.iter().copied().sum::<f64>();
     let sum_losses_abs = losses.iter().map(|x| x.abs()).sum::<f64>();
     s.profit_factor = if sum_losses_abs > 0.0 { sum_wins / sum_losses_abs } else { f64::INFINITY };
-    s.best_trade = closed.iter().filter_map(|t| t.pnl).fold(f64::NEG_INFINITY, f64::max).max(0.0);
-    s.worst_trade = closed.iter().filter_map(|t| t.pnl).fold(f64::INFINITY, f64::min).min(0.0);
+    s.best_trade = closed.iter().filter_map(|time| time.pnl).fold(f64::NEG_INFINITY, f64::max).max(0.0);
+    s.worst_trade = closed.iter().filter_map(|time| time.pnl).fold(f64::INFINITY, f64::min).min(0.0);
     s
 }
 
@@ -193,7 +193,7 @@ pub fn holding_time_stats(closed: &[Trade]) -> HoldingTimeStats {
         return HoldingTimeStats::default();
     }
     let mut minutes: Vec<f64> = closed.iter()
-        .filter_map(|t| Some(((t.exit_time?) - t.entry_time).num_seconds() as f64 / 60.0))
+        .filter_map(|time| Some(((time.exit_time?) - time.entry_time).num_seconds() as f64 / 60.0))
         .collect();
     if minutes.is_empty() { return HoldingTimeStats::default(); }
     minutes.sort_by(|a, b| a.partial_cmp(b).unwrap());

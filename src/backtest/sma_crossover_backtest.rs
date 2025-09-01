@@ -2,12 +2,12 @@ use polars::prelude::*;
 use std::ops::{Div, Sub, Mul};
 use crate::utils::data_io::read_parquet;
 
-const PARQUET_PATH: &str = "data/BTC_2018_min.parquet";
+const PARQUET_PATH: &str = "data/BTC_2021_min.parquet";
 const STARTING_BALANCE: f64 = 10000.0;
 const FAST_SMA: usize = 50;
 const SLOW_SMA: usize = 200;
 
-fn run_sma_crossover_backtest() -> PolarsResult<()> {
+pub fn run_backtest() -> PolarsResult<()> {
     println!("Reading data from: {}", PARQUET_PATH);
     let df = read_parquet(PARQUET_PATH)?
         .lazy()
@@ -169,7 +169,7 @@ fn run_sma_crossover_backtest() -> PolarsResult<()> {
         .expect("[ERROR] No minimum value in `strategy_drawdown`") * 100.0;
 
     println!("-----------------------------------------------------------");
-    println!("SMA Crossover Strategy Analysis");
+    println!("SMA Crossover Strategy Backtest Analysis");
     println!("-----------------------------------------------------------");
     println!("[PARAMETER] Starting Balance: {:.2}$", STARTING_BALANCE);
     println!("[PARAMETER] Fast SMA: {}", FAST_SMA);

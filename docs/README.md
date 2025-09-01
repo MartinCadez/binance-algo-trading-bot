@@ -140,12 +140,12 @@ across container restarts.
 
 - 🚀 Run Trading Simulation:
     ```bash
-    cargo run
+    cargo run -- trade
     ```
 
 - 📊 Run Backtest Analysis:
     ```bash
-    cargo test sma_crossover_analysis_test -- --nocapture
+    cargo run -- backtest
     ```
 
 ## 💡 Advisors

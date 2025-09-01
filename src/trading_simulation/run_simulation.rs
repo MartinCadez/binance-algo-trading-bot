@@ -1,11 +1,8 @@
-mod trading_simulation;
-mod backtest;
-
 use crate::trading_simulation::database::connection;
 use crate::trading_simulation::network::api::market::scheduled_task;
 use crate::trading_simulation::strategy::sma::execute_trade_strategy;
 use crate::utils::objects::CandleStick;
-use crate::trading_simulation::trade_analysis_report::generate_report;
+// use crate::trading_simulation::trade_analysis_report::generate_report;
 use binance_spot_connector_rust::market::klines::KlineInterval;
 
 use dotenv::dotenv;
@@ -18,8 +15,7 @@ const INITIAL_BALANCE: f64 = 500.0;
 const FAST_PERIOD: u32 = 10;
 const SLOW_PERIOD: u32 = 25;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> {
 
     dotenv().ok(); // load env variables
 
@@ -90,16 +86,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .expect("Failed to evaluate decision");
 
-            match generate_report(&pool, SYMBOL, INITIAL_BALANCE).await {
-                Ok(report) => {
-                    println!("{}", report.format_text());   
-                }
-                Err(e) => eprintln!("Failed to generate report: {e}"),
-            }
+            //match generate_report(&pool, SYMBOL, INITIAL_BALANCE).await {
+            //    Ok(report) => {
+            //        println!("{}", report.format_text());   
+            //    }
+            //    Err(e) => eprintln!("Failed to generate report: {e}"),
+            //}
         }
     });
 
     tokio::signal::ctrl_c().await?;
     Ok(())
 }
-
