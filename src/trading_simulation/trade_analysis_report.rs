@@ -1,8 +1,10 @@
-use sqlx::PgPool;
+use crate::trading_simulation::database::crud::{get_closed_trades, get_open_trades};
+use crate::utils::objects::Trade;
 use chrono::{DateTime, Utc};
-use crate::utils::objects::{Trade};
+use sqlx::PgPool;
 
-// point on the realized equity curve (equity after each CLOSED trade)
+// point on the realized equity curve
+// balance updated after each closed trade
 #[derive(Debug, Clone)]
 pub struct EquityPoint {
     pub time: DateTime<Utc>,
@@ -14,8 +16,8 @@ pub struct PnlStats {
     pub total_trades: usize,
     pub winners: usize,
     pub losers: usize,
-    pub win_rate: f64,      // [0, 1]
-    pub gross_pnl: f64,     // sum of realized pnl over CLOSED trades
+    pub win_rate: f64,  // [0, 1]
+    pub gross_pnl: f64, // sum of realized pnl over CLOSED trades
     pub avg_win: f64,
     pub avg_loss: f64,      // negative number (or 0 if none)
     pub profit_factor: f64, // sum(wins) / abs(sum(losses))
@@ -34,24 +36,26 @@ pub struct AnalysisReport {
     pub symbol: String,
     pub equity_curve: Vec<EquityPoint>,
     pub pnl_stats: PnlStats,
-    pub unrealized_pnl: f64,
+    // pub unrealized_pnl: f64,
     pub open_positions: usize,
     pub holding_time: HoldingTimeStats,
 }
 
 impl AnalysisReport {
-    /// Simple text formatter (for logs / console)
     pub fn format_text(&self) -> String {
         let stats = &self.pnl_stats;
         format!(
-            r#"=== Analysis Report ({symbol}) ===
-            Total trades: {tot} | Win rate: {wr:.1}%
-            Gross PnL: {gpnl:.2} | Profit factor: {pf:.2}
-            Best trade: {best:.2} | Worst trade: {worst:.2}
-            Open position: {open} | Unrealized PnL: {unpnl:.2}
-            Avg holding time: {avg_ht:.1}m | Median holding time: {med_ht:.1}m
-            Equity (last): {last_eq:.2}
-            "#,
+            r#"=== Trading Performance Report: {symbol} ===
+Total Trades       : {tot}
+Winning Rate       : {wr:.1}%
+Gross PnL          : ${gpnl:.2}
+Profit Factor      : {pf:.2}
+Best Trade PnL     : ${best:.2}
+Worst Trade PnL    : ${worst:.2}
+Average Hold Time  : {avg_ht:.1} minutes
+Median Hold Time   : {med_ht:.1} minutes
+Balance Equity     : ${last_eq:.2}
+"#,
             symbol = self.symbol,
             tot = stats.total_trades,
             wr = stats.win_rate * 100.0,
@@ -59,8 +63,8 @@ impl AnalysisReport {
             pf = stats.profit_factor,
             best = stats.best_trade,
             worst = stats.worst_trade,
-            open = self.open_positions,
-            unpnl = self.unrealized_pnl,
+            // open = self.open_positions,
+            // unpnl = self.unrealized_pnl,
             avg_ht = self.holding_time.avg_minutes,
             med_ht = self.holding_time.median_minutes,
             last_eq = self.equity_curve.last().map(|e| e.equity).unwrap_or(0.0),
@@ -68,77 +72,24 @@ impl AnalysisReport {
     }
 }
 
-/// Get CLOSED trades for a symbol (ordered by exit_time then id)
-pub async fn get_closed_trades(pool: &PgPool, symbol: &str) -> Result<Vec<Trade>, sqlx::Error> {
-    // cast id::BIGINT to satisfy sqlx type checking.
-    sqlx::query_as!(
-        Trade,
-        r#"
-        SELECT
-            id::BIGINT as "id!: i64",
-            symbol,
-            entry_price,
-            exit_price,
-            position_size,
-            trade_size,
-            pnl,
-            entry_time as "entry_time: chrono::DateTime<chrono::Utc>",
-            exit_time  as "exit_time:  chrono::DateTime<chrono::Utc>",
-            status
-        FROM trades
-        WHERE symbol = $1 AND status = 'CLOSED'
-        ORDER BY exit_time ASC NULLS LAST, id ASC
-        "#,
-        symbol
-    )
-    .fetch_all(pool)
-    .await
-}
+// pub async fn get_last_price(pool: &PgPool, symbol: &str) -> Result<Option<f64>, sqlx::Error> {
+//     // prices uses column `coin`, while your in-memory struct uses `symbol`
+//     sqlx::query_scalar!(
+//         r#"
+//         SELECT close
+//         FROM prices
+//         WHERE coin = $1
+//         ORDER BY timestamp DESC, id DESC
+//         LIMIT 1
+//         "#,
+//         symbol
+//     )
+//     .fetch_optional(pool)
+//     .await
+// }
 
-// Get OPEN trades for a symbol (ordered by entry_time then id)
-pub async fn get_open_trades(pool: &PgPool, symbol: &str) -> Result<Vec<Trade>, sqlx::Error> {
-    sqlx::query_as!(
-        Trade,
-        r#"
-        SELECT
-            id::BIGINT as "id!: i64",
-            symbol,
-            entry_price,
-            exit_price,
-            amount,
-            budget_used,
-            pnl,
-            entry_time as "entry_time: chrono::DateTime<chrono::Utc>",
-            exit_time  as "exit_time:  chrono::DateTime<chrono::Utc>",
-            status
-        FROM trades
-        WHERE symbol = $1 AND status = 'OPEN'
-        ORDER BY entry_time ASC, id ASC
-        "#,
-        symbol
-    )
-    .fetch_all(pool)
-    .await
-}
-
-// Get latest close for a symbol from prices
-pub async fn get_last_price(pool: &PgPool, symbol: &str) -> Result<Option<f64>, sqlx::Error> {
-    // prices uses column `coin`, while your in-memory struct uses `symbol`
-    sqlx::query_scalar!(
-        r#"
-        SELECT close
-        FROM prices
-        WHERE coin = $1
-        ORDER BY timestamp DESC, id DESC
-        LIMIT 1
-        "#,
-        symbol
-    )
-    .fetch_optional(pool)
-    .await
-}
-
-// Build a realized equity curve by accumulating CLOSED-trade PnL
+// calculates the cumulative account equity after each trade is closed
+// updating EquityPoint struct with each closed trade
 pub fn build_equity_curve(initial_balance: f64, closed: &[Trade]) -> Vec<EquityPoint> {
     let mut eq = initial_balance;
     let mut curve = Vec::with_capacity(closed.len());
@@ -151,18 +102,23 @@ pub fn build_equity_curve(initial_balance: f64, closed: &[Trade]) -> Vec<EquityP
     curve
 }
 
-// Sum unrealized PnL over all OPEN trades at a given last price
-pub fn unrealized_pnl(open_trades: &[Trade], last_price: Option<f64>) -> f64 {
-    let Some(lp) = last_price else { return 0.0; };
-    open_trades.iter()
-        .map(|time| (lp - time.entry_price) * time.trade_size)
-        .sum()
-}
+// sum unrealized PnL over all OPEN trades at a given last price
+// pub fn unrealized_pnl(open_trades: &[Trade], last_price: Option<f64>) -> f64 {
+//     let Some(lp) = last_price else {
+//         return 0.0;
+//     };
+//     open_trades
+//         .iter()
+//         .map(|time| (lp - time.entry_price) * time.trade_size)
+//         .sum()
+// }
 
 // aggregate win/loss stats over CLOSED trades
 pub fn pnl_stats(closed: &[Trade]) -> PnlStats {
     let mut s = PnlStats::default();
-    if closed.is_empty() { return s; }
+    if closed.is_empty() {
+        return s;
+    }
 
     s.total_trades = closed.len();
     let mut wins = Vec::new();
@@ -170,32 +126,59 @@ pub fn pnl_stats(closed: &[Trade]) -> PnlStats {
 
     for time in closed {
         let stats = time.pnl.unwrap_or(0.0);
-        if stats >= 0.0 { wins.push(stats); } else { losses.push(stats); }
+        if stats >= 0.0 {
+            wins.push(stats);
+        } else {
+            losses.push(stats);
+        }
     }
 
     s.winners = wins.len();
     s.losers = losses.len();
     s.win_rate = s.winners as f64 / s.total_trades as f64;
     s.gross_pnl = wins.iter().copied().sum::<f64>() + losses.iter().copied().sum::<f64>();
-    s.avg_win = if !wins.is_empty() { wins.iter().copied().sum::<f64>() / wins.len() as f64 } else { 0.0 };
-    s.avg_loss = if !losses.is_empty() { losses.iter().copied().sum::<f64>() / losses.len() as f64 } else { 0.0 };
+    s.avg_win = if !wins.is_empty() {
+        wins.iter().copied().sum::<f64>() / wins.len() as f64
+    } else {
+        0.0
+    };
+    s.avg_loss = if !losses.is_empty() {
+        losses.iter().copied().sum::<f64>() / losses.len() as f64
+    } else {
+        0.0
+    };
     let sum_wins = wins.iter().copied().sum::<f64>();
     let sum_losses_abs = losses.iter().map(|x| x.abs()).sum::<f64>();
-    s.profit_factor = if sum_losses_abs > 0.0 { sum_wins / sum_losses_abs } else { f64::INFINITY };
-    s.best_trade = closed.iter().filter_map(|time| time.pnl).fold(f64::NEG_INFINITY, f64::max).max(0.0);
-    s.worst_trade = closed.iter().filter_map(|time| time.pnl).fold(f64::INFINITY, f64::min).min(0.0);
+    s.profit_factor = if sum_losses_abs > 0.0 {
+        sum_wins / sum_losses_abs
+    } else {
+        f64::INFINITY
+    };
+    s.best_trade = closed
+        .iter()
+        .filter_map(|time| time.pnl)
+        .fold(f64::NEG_INFINITY, f64::max)
+        .max(0.0);
+    s.worst_trade = closed
+        .iter()
+        .filter_map(|time| time.pnl)
+        .fold(f64::INFINITY, f64::min)
+        .min(0.0);
     s
 }
 
-// average/median holding time over CLOSED trades (minutes)
+// average/median holding time over CLOSED trades in minutes
 pub fn holding_time_stats(closed: &[Trade]) -> HoldingTimeStats {
     if closed.is_empty() {
         return HoldingTimeStats::default();
     }
-    let mut minutes: Vec<f64> = closed.iter()
+    let mut minutes: Vec<f64> = closed
+        .iter()
         .filter_map(|time| Some(((time.exit_time?) - time.entry_time).num_seconds() as f64 / 60.0))
         .collect();
-    if minutes.is_empty() { return HoldingTimeStats::default(); }
+    if minutes.is_empty() {
+        return HoldingTimeStats::default();
+    }
     minutes.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let avg = minutes.iter().copied().sum::<f64>() / minutes.len() as f64;
     let med = if minutes.len() % 2 == 1 {
@@ -204,7 +187,10 @@ pub fn holding_time_stats(closed: &[Trade]) -> HoldingTimeStats {
         let mid = minutes.len() / 2;
         (minutes[mid - 1] + minutes[mid]) / 2.0
     };
-    HoldingTimeStats { avg_minutes: avg, median_minutes: med }
+    HoldingTimeStats {
+        avg_minutes: avg,
+        median_minutes: med,
+    }
 }
 
 pub async fn generate_report(
@@ -214,10 +200,10 @@ pub async fn generate_report(
 ) -> Result<AnalysisReport, sqlx::Error> {
     let closed = get_closed_trades(pool, symbol).await?;
     let open = get_open_trades(pool, symbol).await?;
-    let last_price = get_last_price(pool, symbol).await?;
+    // let last_price = get_last_price(pool, symbol).await?;
 
     let curve = build_equity_curve(initial_balance, &closed);
-    let unrl = unrealized_pnl(&open, last_price);
+    //  let unrl = unrealized_pnl(&open, last_price);
     let pnl = pnl_stats(&closed);
     let ht = holding_time_stats(&closed);
 
@@ -225,7 +211,7 @@ pub async fn generate_report(
         symbol: symbol.to_string(),
         equity_curve: curve,
         pnl_stats: pnl,
-        unrealized_pnl: unrl,
+        // unrealized_pnl: unrl,
         open_positions: open.len(),
         holding_time: ht,
     })

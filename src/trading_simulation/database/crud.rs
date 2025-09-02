@@ -85,6 +85,58 @@ pub async fn get_open_trade_info(
     .await
 }
 
+pub async fn get_closed_trades(pool: &PgPool, symbol: &str) -> Result<Vec<Trade>, sqlx::Error> {
+    sqlx::query_as!(
+        Trade,
+        r#"
+        SELECT
+            id::BIGINT as "id!: i64",
+            symbol,
+            entry_price,
+            exit_price,
+            position_size,
+            trade_size,
+            pnl,
+            entry_time as "entry_time: chrono::DateTime<chrono::Utc>",
+            exit_time  as "exit_time:  chrono::DateTime<chrono::Utc>",
+            status
+        FROM trades
+        WHERE symbol = $1 AND status = 'CLOSED'
+        ORDER BY exit_time ASC NULLS LAST, id ASC
+        "#,
+        symbol
+    )
+    .fetch_all(pool)
+    .await
+}
+
+// atm there is always only one trade at the time, but kept for reporting logic
+// in case multiple open trades simulation in used in the future
+pub async fn get_open_trades(pool: &PgPool, symbol: &str) -> Result<Vec<Trade>, sqlx::Error> {
+    sqlx::query_as!(
+        Trade,
+        r#"
+        SELECT
+            id::BIGINT as "id!: i64",
+            symbol,
+            entry_price,
+            exit_price,
+            trade_size,
+            position_size,
+            pnl,
+            entry_time as "entry_time: chrono::DateTime<chrono::Utc>",
+            exit_time  as "exit_time:  chrono::DateTime<chrono::Utc>",
+            status
+        FROM trades
+        WHERE symbol = $1 AND status = 'OPEN'
+        ORDER BY entry_time ASC, id ASC
+        "#,
+        symbol
+    )
+    .fetch_all(pool)
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,10 +147,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_trade_log() {
+        dotenv().ok();
+
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
         let symbol = "TESTSYM";
-
-        dotenv().ok();
 
         let pool = create_db_connection(&database_url)
             .await
