@@ -1,1 +1,1 @@
-pub mod sma;
+pub mod sma_crossover;

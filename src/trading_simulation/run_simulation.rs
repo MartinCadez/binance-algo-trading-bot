@@ -1,21 +1,25 @@
 use crate::trading_simulation::database::connection;
 use crate::trading_simulation::network::api::market::scheduled_task;
-use crate::trading_simulation::strategy::sma::execute_trade_strategy;
+use crate::trading_simulation::strategy::sma_crossover::execute_trade_strategy;
 use crate::utils::objects::CandleStick;
+use crate::utils::config::Settings;
 // use crate::trading_simulation::trade_analysis_report::generate_report;
-use binance_spot_connector_rust::market::klines::KlineInterval;
 
 use dotenv::dotenv;
 use std::env;
 use tokio::sync::mpsc;
 
-const SYMBOL: &str = "BTCUSDT";
-const TIMEFRAME: KlineInterval = KlineInterval::Minutes3;
-const INITIAL_BALANCE: f64 = 500.0;
-const FAST_PERIOD: u32 = 10;
-const SLOW_PERIOD: u32 = 25;
-
 pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> {
+
+    // config load
+    let sim = Settings::load().expect("Failed to load settings").trading_simulation;
+
+    // config constants
+    let timeframe = sim.timeframe_as_binance().expect("Invalid timeframe in config");
+    let symbol = sim.symbol.clone();
+    let initial_balance = sim.initial_balance;
+    let fast_period = sim.fast_period;
+    let slow_period = sim.slow_period;
 
     dotenv().ok(); // load env variables
 
@@ -39,7 +43,7 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
     // required data for initial input into `price` table
     // crud::insert_prices(
     //     &pool,
-    //     fetch_market_data(SYMBOL, SLOW_PERIOD, TIMEFRAME)
+    //     fetch_market_data(symbol, slow_period, timeframe)
     //         .await
     //         .expect("Failed to fetch historical market data"),
     // )
@@ -52,7 +56,7 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
 
     // periodically (each minute) fetch market data, aka cron process as tokio task
     // send batch candlesticks into channel
-    scheduled_task(SYMBOL, SLOW_PERIOD, TIMEFRAME, tx).await;
+    scheduled_task(symbol.clone(), slow_period, timeframe, tx).await;
 
 
     tokio::spawn(async move {
@@ -61,7 +65,7 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
         // wait for incoming batch of candles from channel
         // and do trading part of simulation 
         while let Some(candlesticks) = rx.recv().await {
-            let mut current_balance = INITIAL_BALANCE;
+            let mut current_balance = initial_balance;
 
             if candlesticks.is_empty() { continue; } // no trade if batch is empty
             
@@ -79,14 +83,14 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
                 &pool,
                 &candlesticks,
                 &mut current_balance,
-                SYMBOL,
-                FAST_PERIOD,
-                SLOW_PERIOD,
+                &symbol,
+                fast_period,
+                slow_period,
             )
             .await
             .expect("Failed to evaluate decision");
 
-            //match generate_report(&pool, SYMBOL, INITIAL_BALANCE).await {
+            //match generate_report(&pool, symbol, initial_balance).await {
             //    Ok(report) => {
             //        println!("{}", report.format_text());   
             //    }

@@ -1,15 +1,21 @@
 use polars::prelude::*;
 use std::ops::{Div, Sub, Mul};
 use crate::utils::data_io::read_parquet;
-
-const PARQUET_PATH: &str = "data/BTC_2021_min.parquet";
-const STARTING_BALANCE: f64 = 10000.0;
-const FAST_SMA: usize = 50;
-const SLOW_SMA: usize = 200;
+use crate::utils::config::Settings;
 
 pub fn run_backtest() -> PolarsResult<()> {
-    println!("Reading data from: {}", PARQUET_PATH);
-    let df = read_parquet(PARQUET_PATH)?
+
+    // config load
+    let backtest = Settings::load().expect("Failed to load settings").backtest;
+
+    // config constants
+    let parquet_path = backtest.parquet_path;
+    let test_balance = backtest.test_balance;
+    let fast_period = backtest.fast_period;
+    let slow_period = backtest.slow_period;
+
+    println!("Reading data from: {}", parquet_path);
+    let df = read_parquet(&parquet_path)?
         .lazy()
         .select(
             [col("date"), col("close")]
@@ -35,7 +41,7 @@ pub fn run_backtest() -> PolarsResult<()> {
             (
                     col("kline_return")
                     .cum_prod(false)
-                    .mul(lit(STARTING_BALANCE))
+                    .mul(lit(test_balance))
             )
             .alias("benchmark_balance"),
         ])
@@ -66,7 +72,7 @@ pub fn run_backtest() -> PolarsResult<()> {
             (
                 col("close")
                 .rolling_mean(RollingOptionsFixedWindow {
-                    window_size: FAST_SMA,
+                    window_size: fast_period,
                     min_periods: 1,
                     weights: None,
                     center: false,
@@ -77,7 +83,7 @@ pub fn run_backtest() -> PolarsResult<()> {
             (
                 col("close")
                 .rolling_mean(RollingOptionsFixedWindow {
-                    window_size: SLOW_SMA,
+                    window_size: slow_period,
                     min_periods: 1,
                     weights: None,
                     center: false,
@@ -107,7 +113,7 @@ pub fn run_backtest() -> PolarsResult<()> {
             (
                 col("strategy_return")
                 .cum_prod(false)
-                .mul(lit(STARTING_BALANCE))
+                .mul(lit(test_balance))
             )
             .alias("strategy_balance"),
         ])
@@ -171,16 +177,16 @@ pub fn run_backtest() -> PolarsResult<()> {
     println!("-----------------------------------------------------------");
     println!("SMA Crossover Strategy Backtest Analysis");
     println!("-----------------------------------------------------------");
-    println!("[PARAMETER] Starting Balance: {:.2}$", STARTING_BALANCE);
-    println!("[PARAMETER] Fast SMA: {}", FAST_SMA);
-    println!("[PARAMETER] Slow SMA: {}", SLOW_SMA);
+    println!("[PARAMETER] Starting Balance: {:.2}$", test_balance);
+    println!("[PARAMETER] Fast SMA: {}", fast_period);
+    println!("[PARAMETER] Slow SMA: {}", slow_period);
     println!("-----------------------------------------------------------");
     println!("[BENCHMARK] Total Return: {:.0}$", benchmark_balance);
-    println!("[BENCHMARK] PERFORMANCE: {:.2}%", (benchmark_balance / STARTING_BALANCE - 1.0) * 100.0);
+    println!("[BENCHMARK] PERFORMANCE: {:.2}%", (benchmark_balance / test_balance - 1.0) * 100.0);
     println!("[BENCHMARK] Drawdown: {:.2}%", benchmark_drawdown);
     println!("-----------------------------------------------------------");
     println!("[STRATEGY] Total Return: {:.0}$", strategy_returns);
-    println!("[STRATEGY] PERFORMANCE: {:.2}%", (strategy_returns / STARTING_BALANCE - 1.0) * 100.0);
+    println!("[STRATEGY] PERFORMANCE: {:.2}%", (strategy_returns / test_balance - 1.0) * 100.0);
     println!("[STRATEGY] Drawdown: {:.2}%", strategy_drawdown);
     println!("[STRATEGY] Timing in Market: {:.2}%", timing_in_market);
     println!("-----------------------------------------------------------");

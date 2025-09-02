@@ -1,0 +1,12 @@
+[trading_simulation]
+symbol = "BTCUSDT"
+timeframe = "1m"
+initial_balance = 500.0
+fast_period = 10
+slow_period = 25
+
+[backtest]
+parquet_path = "data/BTC_2021_min.parquet"
+test_balance = 10000.0
+fast_period = 50
+slow_period = 200

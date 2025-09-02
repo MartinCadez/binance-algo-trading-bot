@@ -12,7 +12,7 @@ const CRON_EXPRESSION: &str = "1 * * * * *"; // each minute at first second
 const REQUEST_DELAY_MS: u64 = 250; // Binance API constrain
 
 pub async fn fetch_market_data(
-    symbol: &'static str,
+    symbol: String,
     lookback: u32,
     timeframe: KlineInterval,
 ) -> Result<Vec<CandleStick>, Error> {
@@ -25,7 +25,7 @@ pub async fn fetch_market_data(
 
     // sending http request asynchronously
     match client
-        .send(market::klines(symbol, timeframe).limit(lookback))
+        .send(market::klines(&symbol, timeframe).limit(lookback))
         .await
     {
         Ok(response) => {
@@ -62,7 +62,7 @@ pub async fn fetch_market_data(
 }
 
 pub async fn scheduled_task(
-    symbol: &'static str,
+    symbol: String,
     lookback: u32,
     timeframe: KlineInterval,
     tx: Sender<Vec<CandleStick>>,
@@ -73,8 +73,10 @@ pub async fn scheduled_task(
         .add(
             Job::new_async(CRON_EXPRESSION, {
                 let tx = tx.clone();
+                let symbol = symbol.clone(); // clone for outer closure
                 move |_uuid, _l| {
                     let tx = tx.clone();
+                    let symbol = symbol.clone(); // clone for async block
                     Box::pin(async move {
                         match fetch_market_data(symbol, lookback, timeframe).await {
                             Ok(candlesticks) => {
@@ -103,7 +105,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_hist_data_fetch() {
-        let symbol: &'static str = "BTCUSDT";
+        let symbol: &String = "BTCUSDT".to_string();
         let timeframes: Vec<KlineInterval> = vec![KlineInterval::Minutes1, KlineInterval::Minutes3];
         let lookback: u32 = 2;
 

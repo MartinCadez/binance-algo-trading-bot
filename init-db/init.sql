@@ -11,7 +11,7 @@
 
 CREATE TABLE IF NOT EXISTS trades (
     id SERIAL PRIMARY KEY,
-    symbol VARCHAR(10) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
     entry_price FLOAT NOT NULL,
     exit_price FLOAT,
     trade_size FLOAT NOT NULL CHECK (trade_size > 0),
