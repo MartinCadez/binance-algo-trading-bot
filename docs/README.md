@@ -123,7 +123,7 @@ are first satisfied for buy or sell signals, respectively.
     docker compose up -d
     ```
 >[!NOTE]
-> Current configuration ([`docker-compose.yml`](./docker-compose.yml)) defines
+> Current configuration ([`docker-compose.yml`](../docker-compose.yml)) defines
 a service which deploys PostgreSQL 17.5 database container with named volume. 
 This way we have persistent storage, which can be used 
 across container restarts.
@@ -138,7 +138,7 @@ across container restarts.
 
 ## 📋 Configuration Parameters
     
-- 📝 Current Configuration inside [`config.toml`](./config.toml): 
+- 📝 Current Configuration inside [`config.toml`](../config.toml): 
 ```toml
 [trading_simulation]
 symbol = "BTCUSDT"          # Trading Pair
