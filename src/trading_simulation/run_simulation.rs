@@ -1,21 +1,24 @@
 use crate::trading_simulation::database::connection;
 use crate::trading_simulation::network::api::market::scheduled_task;
 use crate::trading_simulation::strategy::sma_crossover::execute_trade_strategy;
-use crate::utils::objects::CandleStick;
+use crate::trading_simulation::trade_analysis_report::generate_report;
 use crate::utils::config::Settings;
-// use crate::trading_simulation::trade_analysis_report::generate_report;
+use crate::utils::objects::CandleStick;
 
 use dotenv::dotenv;
 use std::env;
 use tokio::sync::mpsc;
 
 pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> {
-
     // config load
-    let sim = Settings::load().expect("Failed to load settings").trading_simulation;
+    let sim = Settings::load()
+        .expect("Failed to load settings")
+        .trading_simulation;
 
     // config constants
-    let timeframe = sim.timeframe_as_binance().expect("Invalid timeframe in config");
+    let timeframe = sim
+        .timeframe_as_binance()
+        .expect("Invalid timeframe in config");
     let symbol = sim.symbol.clone();
     let initial_balance = sim.initial_balance;
     let fast_period = sim.fast_period;
@@ -23,18 +26,16 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
 
     dotenv().ok(); // load env variables
 
-    let database_url = env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set inside .env file");
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set inside .env file");
 
     let pool = connection::create_db_connection(&database_url)
         .await
         .expect("Connection to database failed");
 
-
     // atm market prices in db are not used in trading simulation since `lookback` is small
     // in case we would implement other trading strategies, that would rely on ML or some heavy stat anaysis
     // having those prices stored in db would come handy
-    
+
     // start from a clean slate on each run
     // crud::clear_prices_table(&pool)
     //     .await
@@ -50,7 +51,6 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
     // .await
     // .expect("Failed to insert historical prices");
 
-
     // asynchronous channel for passing batch of candlestick through (only one vector with candlesticks)
     let (tx, mut rx) = mpsc::channel::<Vec<CandleStick>>(1);
 
@@ -58,17 +58,17 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
     // send batch candlesticks into channel
     scheduled_task(symbol.clone(), slow_period, timeframe, tx).await;
 
-
     tokio::spawn(async move {
-
         // main processing lopp:
         // wait for incoming batch of candles from channel
-        // and do trading part of simulation 
+        // and do trading part of simulation
         while let Some(candlesticks) = rx.recv().await {
             let mut current_balance = initial_balance;
 
-            if candlesticks.is_empty() { continue; } // no trade if batch is empty
-            
+            if candlesticks.is_empty() {
+                continue;
+            } // no trade if batch is empty
+
             // let last_candle = candlesticks.last().unwrap();
             // println!("Last candle: {:?}", last_candle);
 
@@ -90,12 +90,12 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
             .await
             .expect("Failed to evaluate decision");
 
-            //match generate_report(&pool, symbol, initial_balance).await {
-            //    Ok(report) => {
-            //        println!("{}", report.format_text());   
-            //    }
-            //    Err(e) => eprintln!("Failed to generate report: {e}"),
-            //}
+            match generate_report(&pool, &symbol, initial_balance).await {
+                Ok(report) => {
+                    println!("{}", report.format_text());
+                }
+                Err(e) => eprintln!("Failed to generate report: {e}"),
+            }
         }
     });
 

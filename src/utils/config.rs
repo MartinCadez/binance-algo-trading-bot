@@ -56,7 +56,7 @@ pub struct Backtest {
 
 impl Backtest {
     pub fn validate(&self) -> Result<(), String> {
-        if self.test_balance< 0.0 {
+        if self.test_balance < 0.0 {
             return Err("Starting balance cannot be negative".into());
         }
         if self.fast_period < 2 || self.slow_period < 2 {
@@ -90,7 +90,6 @@ impl Settings {
         Ok(settings)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -105,24 +105,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_hist_data_fetch() {
-        let symbol: &String = "BTCUSDT".to_string();
+        let symbol: String = "BTCUSDT".to_string();
         let timeframes: Vec<KlineInterval> = vec![KlineInterval::Minutes1, KlineInterval::Minutes3];
         let lookback: u32 = 2;
 
         for i in timeframes {
-            let result = fetch_market_data(symbol, lookback, i).await;
+            let result = fetch_market_data(symbol.clone(), lookback, i).await;
             println!("{:?}", result.unwrap());
         }
     }
 
     #[tokio::test]
     async fn test_scheduled_task_with_output() {
-        let symbol: &'static str = "BTCUSDT";
+        let symbol: String = "BTCUSDT".to_string();
         let timeframe: KlineInterval = KlineInterval::Minutes1;
         let lookback: u32 = 3;
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<CandleStick>>(10);
 
-        scheduled_task(symbol, lookback, timeframe, tx).await;
+        scheduled_task(symbol.clone(), lookback, timeframe, tx).await;
 
         tokio::spawn(async move {
             while let Some(candles) = rx.recv().await {

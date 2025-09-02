@@ -120,14 +120,8 @@ pub async fn execute_trade_strategy(
                 let pnl = (exit_price - open_trade.entry_price) * open_trade.trade_size;
 
                 // db insert log
-                record_close_trade(
-                    pool,
-                    open_trade.id,
-                    exit_price,
-                    pnl,
-                    last_candle.timestamp,
-                )
-                .await?;
+                record_close_trade(pool, open_trade.id, exit_price, pnl, last_candle.timestamp)
+                    .await?;
 
                 println!(
                     "[SOLD] Closed long trade for {} at price {}, PnL: {:.2}",

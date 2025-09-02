@@ -1,10 +1,10 @@
-pub mod utils;
-pub mod trading_simulation;
 pub mod backtest;
+pub mod trading_simulation;
+pub mod utils;
 
+use backtest::run_backtest;
 use clap::{Parser, Subcommand};
 use trading_simulation::run_trading_simulation;
-use backtest::run_backtest;
 
 #[derive(Parser)]
 #[command(name = "bot")]
