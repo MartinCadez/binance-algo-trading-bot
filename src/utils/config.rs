@@ -44,6 +44,16 @@ impl TradingSimulation {
         }
         Ok(())
     }
+
+    pub fn print_trading_simulation_params(&self) {
+        println!("--- Trading Simulation Config ---");
+        println!("Symbol          : {}", self.symbol);
+        println!("Timeframe       : {}", self.timeframe);
+        println!("Initial Balance : {}", self.initial_balance);
+        println!("Fast SMA Period : {}", self.fast_period);
+        println!("Slow SMA Period : {}", self.slow_period);
+        println!("--------------------------------");
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +76,15 @@ impl Backtest {
             return Err("Period cannot exceed 10,000".into());
         }
         Ok(())
+    }
+    
+    pub fn print_backtest_params(&self) {
+        println!("--- Backtest Config ---");
+        println!("Parquet Path    : {}", self.parquet_path);
+        println!("Test Balance    : {}", self.test_balance);
+        println!("Fast SMA Period : {}", self.fast_period);
+        println!("Slow SMA Period : {}", self.slow_period);
+        println!("-----------------------");
     }
 }
 

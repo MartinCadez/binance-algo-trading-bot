@@ -15,6 +15,8 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
         .expect("Failed to load settings")
         .trading_simulation;
 
+    sim.print_trading_simulation_params();
+
     // config constants
     let timeframe = sim
         .timeframe_as_binance()
