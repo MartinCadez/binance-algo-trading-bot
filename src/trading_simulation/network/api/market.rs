@@ -61,39 +61,65 @@ pub async fn fetch_market_data(
     Ok(candlesticks)
 }
 
-pub async fn scheduled_task(
+
+// periodically fetch market candlestick data and send it to async channel 
+// to be consumed by main trading async task
+pub async fn spawn_cron_market_feed(
     symbol: String,
     lookback: u32,
     timeframe: KlineInterval,
     tx: Sender<Vec<CandleStick>>,
 ) {
-    let scheduler = JobScheduler::new().await.unwrap();
+    // cron scheduler
+    let scheduler = JobScheduler::new()
+        .await
+        .unwrap();
 
+    // task register
     scheduler
         .add(
-            Job::new_async(CRON_EXPRESSION, {
-                let tx = tx.clone();
-                let symbol = symbol.clone(); // clone for outer closure
+            // create cron job
+            Job::new_async(
+            CRON_EXPRESSION,
+            {
+
+                // lifetime: until scheduler is not terminated
                 move |_uuid, _l| {
+                    
+                    // lifetime: one cron execution
+                    // fresh ownership for each closure execution (tokio stuff)
                     let tx = tx.clone();
-                    let symbol = symbol.clone(); // clone for async block
-                    Box::pin(async move {
-                        match fetch_market_data(symbol, lookback, timeframe).await {
-                            Ok(candlesticks) => {
-                                if let Err(err) = tx.send(candlesticks).await {
-                                    eprintln!("Failed to send candlesticks: {}", err);
+                    let symbol = symbol.clone();
+
+                    // keeping consistent adress in virtual memory 
+                    // pinning prevents movement during .await suspension (tokio stuff)
+                    Box::pin(
+
+                        // move local vars to anonymous struct made by compiler
+                        // with local vars and current state, future trait is implemented
+                        // pool enum tells executor when data is ready or not, to proceed
+                        async move {
+                            match fetch_market_data(symbol, lookback, timeframe).await {
+
+                                // send data to channel
+                                Ok(candlesticks) => {
+                                    if let Err(err) = tx.send(candlesticks).await {
+                                        eprintln!("Failed to send candlesticks: {}", err);
+                                    }
                                 }
+                                Err(e) => eprintln!("Error fetching market data: {:?}", e),
                             }
-                            Err(e) => eprintln!("Error fetching market data: {:?}", e),
                         }
-                    })
+                    )
                 }
+
             })
             .unwrap(),
         )
         .await
         .unwrap();
 
+    // spawn task
     tokio::spawn(async move {
         scheduler.start().await.unwrap();
     });
@@ -122,7 +148,7 @@ mod tests {
         let lookback: u32 = 3;
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<CandleStick>>(10);
 
-        scheduled_task(symbol.clone(), lookback, timeframe, tx).await;
+        spawn_cron_market_feed(symbol.clone(), lookback, timeframe, tx).await;
 
         tokio::spawn(async move {
             while let Some(candles) = rx.recv().await {

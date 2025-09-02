@@ -1,5 +1,5 @@
 use crate::trading_simulation::database::connection;
-use crate::trading_simulation::network::api::market::scheduled_task;
+use crate::trading_simulation::network::api::market::spawn_cron_market_feed;
 use crate::trading_simulation::strategy::sma_crossover::execute_trade_strategy;
 use crate::trading_simulation::trade_analysis_report::generate_report;
 use crate::utils::config::Settings;
@@ -53,13 +53,15 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
     // .await
     // .expect("Failed to insert historical prices");
 
-    // asynchronous channel for passing batch of candlestick through (only one vector with candlesticks)
+    // multi-producer single-consumer channel - multiple transmitors, only one receiver
+    // channel capacity: one batch of candlestics (only vector can wait in channel)
     let (tx, mut rx) = mpsc::channel::<Vec<CandleStick>>(1);
 
     // periodically (each minute) fetch market data, aka cron process as tokio task
     // send batch candlesticks into channel
-    scheduled_task(symbol.clone(), slow_period, timeframe, tx).await;
+    spawn_cron_market_feed(symbol.clone(), slow_period, timeframe, tx).await;
 
+    // trading execution task
     tokio::spawn(async move {
         // main processing lopp:
         // wait for incoming batch of candles from channel
@@ -98,6 +100,7 @@ pub async fn run_trading_simulation() -> Result<(), Box<dyn std::error::Error>> 
                 }
                 Err(e) => eprintln!("Failed to generate report: {e}"),
             }
+            
         }
     });
 
