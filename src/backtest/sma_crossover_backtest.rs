@@ -197,12 +197,15 @@ pub fn run_backtest() -> PolarsResult<()> {
     Ok(())
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     fn test_sma_crossover_backtest() -> PolarsResult<()> {
-//         sma_crossover_backtest()
-//     }
-// }
+    #[test]
+    fn test_run_backtest_execution() {
+        let result = run_backtest();
+        if let Err(e) = result {
+            panic!("Backtest failed with error: {:?}", e);
+        }
+    }
+}
