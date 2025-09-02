@@ -136,16 +136,101 @@ across container restarts.
 > docker ps --filter "name=postgres_db"
 > ``````
 
+## 📋 Configuration Parameters
+    
+- 📝 Current Configuration inside [`config.toml`](./config.toml): 
+```toml
+[trading_simulation]
+symbol = "BTCUSDT"          # Trading Pair
+timeframe = "1m"            # Candlestick Interval
+initial_balance = 500.0     # Starting Budged
+fast_period = 10            # Lookback Period for fast SMA
+slow_period = 25            # Lookback Period for slow SMA
+
+[backtest]
+parquet_path = "data/BTC_2021_min.parquet"  # Path to historical data
+test_balance = 10000.0      # Starting Budged
+fast_period = 50            # Lookback Period for fast SMA
+slow_period = 200           # Lookback Period for slow SMA
+```
+- 🔑 Parameter Options: 
+
+<table>
+  <thead>
+    <tr>
+      <th>Section</th>
+      <th>Parameter</th>
+      <th>Type</th>
+      <th>Allowed / Suggested Values</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>trading_simulation</td>
+      <td><code>symbol</code></td>
+      <td>String</td>
+      <td>Any valid Binance trading pair, e.g., <code>BTCUSDT</code>, <code>ETHUSDT</code>, see <a href="https://support.binance.us/en/articles/9842915-listings-on-binance-us-supported-crypto-networks-and-trading-pairs" target="_blank">supported trading pairs</a></td>
+    </tr>
+    <tr>
+      <td>trading_simulation</td>
+      <td><code>timeframe</code></td>
+      <td>String</td>
+      <td><code>1m</code>, <code>3m</code>, <code>5m</code>, <code>15m</code>, <code>30m</code>, <code>1h</code>, <code>2h</code>, <code>4h</code>, <code>6h</code>, <code>12h</code>, <code>1d</code>, <code>3d</code>, <code>1w</code></td>
+    </tr>
+      <td>trading_simulation</td>
+      <td><code>initial_balance</code></td>
+      <td>Float</td>
+      <td>Any positive number, e.g., <code>100.30</code>, <code>530.53</code>, <code>1600.43</code></td>
+    </tr>
+    <tr>
+      <td>trading_simulation</td>
+      <td><code>fast_period</code></td>
+      <td>Integer</td>
+      <td>Any natural number greater then 2, e.g., <code>8</code>, <code>25</code>, <code>50</code></td>
+    </tr>
+    <tr>
+      <td>trading_simulation</td>
+      <td><code>slow_period</code></td>
+      <td>Integer</td>
+      <td>Any natural number greater then 3 & <code>fast_period + 1</code></td>
+    </tr>
+    <tr>
+      <td>backtest</td>
+      <td><code>parquet_path</code></td>
+      <td>String</td>
+      <td>Path to market data in Parquet file, must present columns: <code>"date", "high", "open, "close", "low"</code></td>
+    </tr>
+    <tr>
+      <td>backtest</td>
+      <td><code>test_balance</code></td>
+      <td>Float</td>
+      <td>Any positive number, e.g., <code>1050.40</code>, <code>5500.50</code>, <code>10000</code></td>
+    </tr>
+    <tr>
+      <td>backtest</td>
+      <td><code>fast_period</code></td>
+      <td>Integer</td>
+      <td>Any natural number greater then 2, e.g., <code>8</code>, <code>25</code>, <code>50</code></td>
+    </tr>
+    <tr>
+      <td>backtest</td>
+      <td><code>slow_period</code></td>
+      <td>Integer</td>
+      <td>Any natural number greater then 3 & <code>fast_period + 1</code></td>
+    </tr>
+  </tbody>
+</table>
+
 ## 💨 Execution
 
 - 🚀 Run Trading Simulation:
     ```bash
-    cargo run -- trade
+    cargo run trade
     ```
 
 - 📊 Run Backtest Analysis:
     ```bash
-    cargo run -- backtest
+    cargo run backtest
     ```
 
 ## 💡 Advisors
